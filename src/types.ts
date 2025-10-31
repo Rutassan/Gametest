@@ -1,0 +1,134 @@
+export type ResourceType = "gold" | "influence" | "labor";
+
+export interface ResourcePool {
+  gold: number;
+  influence: number;
+  labor: number;
+}
+
+export type Department =
+  | "economy"
+  | "diplomacy"
+  | "internal"
+  | "military"
+  | "science";
+
+export const DEPARTMENTS: Department[] = [
+  "economy",
+  "diplomacy",
+  "internal",
+  "military",
+  "science",
+];
+
+export interface Region {
+  name: string;
+  population: number;
+  wealth: number;
+  loyalty: number;
+  infrastructure: number;
+  specialization: "trade" | "agriculture" | "industry";
+  resourceOutput: ResourcePool;
+}
+
+export interface Estate {
+  name: string;
+  influence: number;
+  satisfaction: number;
+  favoredDepartment: Department;
+}
+
+export interface DepartmentState {
+  name: Department;
+  efficiency: number;
+  budget: number;
+  cumulativeInvestment: number;
+}
+
+export interface Decree {
+  name: string;
+  investmentPriority: InvestmentPriority;
+  taxPolicy: TaxPolicy;
+}
+
+export type InvestmentPriority =
+  | "balanced"
+  | "infrastructure"
+  | "military"
+  | "innovation"
+  | "stability";
+
+export type TaxPolicy = "low" | "standard" | "high";
+
+export interface AdvisorContext {
+  resources: ResourcePool;
+  estates: Estate[];
+  departments: DepartmentState[];
+  decree: Decree;
+}
+
+export type BudgetAllocation = Partial<Record<Department, number>>;
+
+export interface Advisor {
+  name: string;
+  description: string;
+  allocateBudget(context: AdvisorContext): BudgetAllocation;
+}
+
+export interface MonthlyExpenses {
+  departments: Record<Department, number>;
+  total: number;
+}
+
+export interface SimulationEvent {
+  description: string;
+  severity: "minor" | "moderate" | "major";
+}
+
+export interface EstateSnapshot {
+  name: string;
+  satisfaction: number;
+  influence: number;
+}
+
+export interface RegionSnapshot {
+  name: string;
+  wealth: number;
+  loyalty: number;
+  infrastructure: number;
+}
+
+export interface MonthlyReport {
+  month: number;
+  incomes: ResourcePool;
+  expenses: MonthlyExpenses;
+  treasury: ResourcePool;
+  estates: EstateSnapshot[];
+  regions: RegionSnapshot[];
+  events: SimulationEvent[];
+}
+
+export interface SimulationConfig {
+  months: number;
+  baseMonthlyBudget: number;
+  initialResources: ResourcePool;
+  regions: Region[];
+  estates: Estate[];
+  departments: DepartmentState[];
+  advisor: Advisor;
+  decree: Decree;
+}
+
+export interface SimulationResult {
+  reports: MonthlyReport[];
+  totals: {
+    incomes: ResourcePool;
+    expenses: MonthlyExpenses;
+  };
+  finalState: {
+    resources: ResourcePool;
+    regions: Region[];
+    estates: Estate[];
+    departments: DepartmentState[];
+  };
+}

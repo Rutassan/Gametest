@@ -1,0 +1,19 @@
+{
+  "name": "gametest",
+  "version": "1.0.0",
+  "description": "Grand strategy economic simulation prototype",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "simulate": "ts-node src/index.ts"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.9.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
