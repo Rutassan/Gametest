@@ -1,7 +1,51 @@
 import { BalancedChancellor, MilitaristMarshal, ReformistScholar } from "./advisors";
 import { departments, estates, initialResources, regions } from "./data";
 import { runSimulation } from "./simulation";
-import { SimulationConfig } from "./types";
+import {
+  SimulationConfig,
+  SimulationEventCost,
+  SimulationEventEffect,
+  SimulationEventEscalation,
+} from "./types";
+
+function formatCost(cost: SimulationEventCost | undefined): string {
+  if (!cost) {
+    return "";
+  }
+  const entries = Object.entries(cost).filter(([, value]) => value !== undefined);
+  return entries
+    .map(([resource, value]) => `${resource}: ${value}`)
+    .join(", ");
+}
+
+function formatEffects(effects: SimulationEventEffect[]): string {
+  if (effects.length === 0) {
+    return "";
+  }
+  return effects
+    .map((effect) => {
+      const duration = effect.duration ? ` (на ${effect.duration} хода)` : "";
+      const valueSign = effect.value > 0 ? "+" : "";
+      return `${effect.type} → ${effect.target}: ${valueSign}${effect.value}${duration}`;
+    })
+    .join("; ");
+}
+
+function formatFollowUps(followUps: string[] | undefined): string {
+  if (!followUps || followUps.length === 0) {
+    return "";
+  }
+  return followUps.join(", ");
+}
+
+function formatEscalations(escalations: SimulationEventEscalation[] | undefined): string {
+  if (!escalations || escalations.length === 0) {
+    return "";
+  }
+  return escalations
+    .map((escalation) => `${Math.round(escalation.chance * 100)}% → ${escalation.followUp}: ${escalation.description}`)
+    .join("; ");
+}
 
 const advisor = new ReformistScholar();
 
@@ -49,7 +93,56 @@ for (const report of result.reports) {
   if (report.events.length > 0) {
     console.log("События:");
     for (const event of report.events) {
-      console.log(` • [${event.severity}] ${event.description}`);
+      console.log(` • [${event.severity}] (${event.category}) ${event.title}`);
+      console.log(`   ${event.description}`);
+      if (event.factions.length > 0) {
+        console.log(`   Фракции: ${event.factions.join(", ")}`);
+      }
+      const metricConditions = event.conditions.metrics ?? {};
+      const metricEntries = Object.entries(metricConditions);
+      if (metricEntries.length > 0) {
+        console.log(
+          `   Условия: ${metricEntries
+            .map(([metric, value]) => `${metric} ${value}`)
+            .join(", ")}`
+        );
+      }
+      if (event.conditions.flags && event.conditions.flags.length > 0) {
+        console.log(`   Флаги: ${event.conditions.flags.join(", ")}`);
+      }
+      if (event.options.length > 0) {
+        console.log("   Опции:");
+        for (const option of event.options) {
+          console.log(`     - (${option.id}) ${option.description}`);
+          const formattedCost = formatCost(option.cost);
+          if (formattedCost) {
+            console.log(`       Стоимость: ${formattedCost}`);
+          }
+          const formattedEffects = formatEffects(option.effects);
+          if (formattedEffects) {
+            console.log(`       Эффекты: ${formattedEffects}`);
+          }
+          const formattedFollowUps = formatFollowUps(option.followUps);
+          if (formattedFollowUps) {
+            console.log(`       Последующие события: ${formattedFollowUps}`);
+          }
+          if (option.cooldown !== undefined) {
+            console.log(`       Перезарядка: ${option.cooldown} ход(а)`);
+          }
+        }
+      }
+      const escalationSummary = formatEscalations(event.escalation);
+      if (escalationSummary) {
+        console.log(`   Эскалации: ${escalationSummary}`);
+      }
+      const failureIntro = event.failure.description
+        ? `${event.failure.description} Через ${event.failure.timeout} ход(а) автоматически:`
+        : `Через ${event.failure.timeout} ход(а) автоматически:`;
+      console.log(`   Провал: ${failureIntro}`);
+      const failureEffects = formatEffects(event.failure.effects);
+      if (failureEffects) {
+        console.log(`   Последствия провала: ${failureEffects}`);
+      }
     }
   }
 }

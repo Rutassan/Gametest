@@ -80,9 +80,66 @@ export interface QuarterlyExpenses {
   total: number;
 }
 
-export interface SimulationEvent {
+export type EventCategory =
+  | "Экономический кризис"
+  | "Стихийное бедствие"
+  | "Политические интриги"
+  | "Социальные потрясения"
+  | "Военные угрозы"
+  | "Технологические / магические открытия"
+  | "Дипломатические кризисы";
+
+export interface SimulationEventCondition {
+  metrics?: Record<string, string>;
+  flags?: string[];
+}
+
+export interface SimulationEventEffect {
+  type: string;
+  target: string;
+  value: number;
+  duration?: number;
+}
+
+export interface SimulationEventCost {
+  gold?: number;
+  influence?: number;
+  labor?: number;
+  [key: string]: number | undefined;
+}
+
+export interface SimulationEventOption {
+  id: string;
   description: string;
+  cost?: SimulationEventCost;
+  effects: SimulationEventEffect[];
+  followUps?: string[];
+  cooldown?: number;
+}
+
+export interface SimulationEventFailure {
+  timeout: number;
+  effects: SimulationEventEffect[];
+  description?: string;
+}
+
+export interface SimulationEventEscalation {
+  chance: number;
+  followUp: string;
+  description: string;
+}
+
+export interface SimulationEvent {
+  id: string;
+  title: string;
+  description: string;
+  category: EventCategory;
+  factions: string[];
+  conditions: SimulationEventCondition;
+  options: SimulationEventOption[];
+  failure: SimulationEventFailure;
   severity: "minor" | "moderate" | "major";
+  escalation?: SimulationEventEscalation[];
 }
 
 export interface EstateSnapshot {

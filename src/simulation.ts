@@ -16,6 +16,12 @@ import {
   SimulationResult,
 } from "./types";
 import {
+  createEstateDissatisfactionEvent,
+  createInfrastructureMilestoneEvent,
+  createLoyaltyDeclineEvent,
+  createTreasuryDepletionEvent,
+} from "./events";
+import {
   priorityBudgetBoost,
   priorityDevelopmentMultiplier,
   taxIncomeModifier,
@@ -158,10 +164,9 @@ function updateRegions(
       const before = region.infrastructure;
       region.infrastructure = clamp(region.infrastructure + infrastructureGain, 0, 120);
       if (Math.floor(before / 5) !== Math.floor(region.infrastructure / 5)) {
-        events.push({
-          description: `Инфраструктура региона ${region.name} выросла до ${region.infrastructure.toFixed(1)}`,
-          severity: "minor",
-        });
+        events.push(
+          createInfrastructureMilestoneEvent(region, region.infrastructure)
+        );
       }
     }
 
@@ -176,10 +181,7 @@ function updateRegions(
     region.loyalty = clamp(loyaltyBase + loyaltyShift, 20, 100);
 
     if (region.loyalty < 45) {
-      events.push({
-        description: `Лояльность региона ${region.name} падает до ${region.loyalty.toFixed(1)}%`,
-        severity: "moderate",
-      });
+      events.push(createLoyaltyDeclineEvent(region, region.loyalty));
     }
   }
 
@@ -209,10 +211,7 @@ function updateEstates(
     estate.influence = clamp(estate.influence + influenceDelta, 5, 40);
 
     if (estate.satisfaction < 35) {
-      events.push({
-        description: `${estate.name} недовольно и готовит давление на двор`,
-        severity: "major",
-      });
+      events.push(createEstateDissatisfactionEvent(estate, estate.satisfaction));
     }
   }
 
@@ -356,10 +355,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
 
     const events: SimulationEvent[] = [...regionEvents, ...estateEvents];
     if (resources.gold < config.baseQuarterBudget * 0.3) {
-      events.push({
-        description: "Казна близка к нулю, совет требует пересмотра бюджета",
-        severity: "moderate",
-      });
+      events.push(createTreasuryDepletionEvent(resources.gold));
     }
 
     reports.push({
