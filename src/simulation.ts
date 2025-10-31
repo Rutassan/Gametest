@@ -5,8 +5,8 @@ import {
   Department,
   DepartmentState,
   Estate,
-  MonthlyExpenses,
-  MonthlyReport,
+  QuarterlyExpenses,
+  QuarterReport,
   Region,
   ResourcePool,
   SimulationConfig,
@@ -22,6 +22,8 @@ import {
   taxLoyaltyModifier,
   taxSatisfactionDelta,
 } from "./decrees";
+
+const QUARTER_DURATION = 3;
 
 function cloneResources(pool: ResourcePool): ResourcePool {
   return { gold: pool.gold, influence: pool.influence, labor: pool.labor };
@@ -60,7 +62,8 @@ function calculateRegionIncome(
   decreeTaxModifier: number,
   economyEfficiency: number,
   scienceEfficiency: number,
-  decreePriority: InvestmentPriority
+  decreePriority: InvestmentPriority,
+  timeMultiplier: number
 ): ResourcePool {
   const loyaltyFactor = clamp(region.loyalty / 100, 0.3, 1.2);
   const infrastructureFactor = 1 + region.infrastructure / 120;
@@ -81,7 +84,7 @@ function calculateRegionIncome(
   const labor =
     region.resourceOutput.labor * (1 + region.population / 2_000_000) * specializationFactor;
 
-  return { gold, influence, labor };
+  return scaleResources({ gold, influence, labor }, timeMultiplier);
 }
 
 function normalizeAllocationWithDecree(
@@ -118,7 +121,8 @@ function updateDepartmentState(
   departments: DepartmentState[],
   spending: Record<Department, number>,
   baseBudget: number,
-  priority: InvestmentPriority
+  priority: InvestmentPriority,
+  timeMultiplier: number
 ) {
   for (const department of departments) {
     const spent = spending[department.name] ?? 0;
@@ -126,7 +130,8 @@ function updateDepartmentState(
     department.cumulativeInvestment += spent;
     const investmentRatio = spent / baseBudget;
     const priorityBonus = priorityBudgetBoost(priority, department.name) - 1;
-    const delta = investmentRatio * 0.08 + priorityBonus * 0.02 - 0.01;
+    const delta =
+      (investmentRatio * 0.08 + priorityBonus * 0.02 - 0.01) * timeMultiplier;
     department.efficiency = clamp(department.efficiency + delta, 0.6, 2.5);
   }
 }
@@ -135,7 +140,8 @@ function updateRegions(
   regions: Region[],
   spending: Record<Department, number>,
   decreePriority: InvestmentPriority,
-  loyaltyModifier: number
+  loyaltyModifier: number,
+  timeMultiplier: number
 ): SimulationEvent[] {
   const events: SimulationEvent[] = [];
   const economySpend = spending.economy ?? 0;
@@ -144,8 +150,10 @@ function updateRegions(
   const scienceSpend = spending.science ?? 0;
 
   for (const region of regions) {
-    const infrastructureGain = (economySpend * 0.03 + scienceSpend * 0.01) *
-      priorityDevelopmentMultiplier(decreePriority, region.specialization);
+    const infrastructureGain =
+      (economySpend * 0.03 + scienceSpend * 0.01) *
+      priorityDevelopmentMultiplier(decreePriority, region.specialization) *
+      timeMultiplier;
     if (infrastructureGain > 0.01) {
       const before = region.infrastructure;
       region.infrastructure = clamp(region.infrastructure + infrastructureGain, 0, 120);
@@ -157,12 +165,15 @@ function updateRegions(
       }
     }
 
-    const wealthGain = economySpend * 0.04 * (1 + region.infrastructure / 100);
-    region.wealth = Math.max(10, region.wealth + wealthGain - 0.5);
+    const wealthGain =
+      economySpend * 0.04 * (1 + region.infrastructure / 100) * timeMultiplier;
+    region.wealth = Math.max(10, region.wealth + wealthGain - 0.5 * timeMultiplier);
 
     const loyaltyShift =
-      (internalSpend * 0.02 + militarySpend * 0.015) * loyaltyModifier - (economySpend * 0.005);
-    region.loyalty = clamp(region.loyalty * loyaltyModifier + loyaltyShift, 20, 100);
+      ((internalSpend * 0.02 + militarySpend * 0.015) * loyaltyModifier -
+        economySpend * 0.005) * timeMultiplier;
+    const loyaltyBase = region.loyalty * Math.pow(loyaltyModifier, timeMultiplier);
+    region.loyalty = clamp(loyaltyBase + loyaltyShift, 20, 100);
 
     if (region.loyalty < 45) {
       events.push({
@@ -178,16 +189,23 @@ function updateRegions(
 function updateEstates(
   estates: Estate[],
   spending: Record<Department, number>,
-  taxPolicy: TaxPolicy
+  taxPolicy: TaxPolicy,
+  timeMultiplier: number
 ): SimulationEvent[] {
   const events: SimulationEvent[] = [];
 
   for (const estate of estates) {
     const favoredSpend = spending[estate.favoredDepartment] ?? 0;
-    const satisfactionDelta = favoredSpend * 0.1 + taxSatisfactionDelta(taxPolicy, estate.name);
-    estate.satisfaction = clamp(estate.satisfaction + satisfactionDelta - 1, 10, 90);
+    const satisfactionDelta =
+      (favoredSpend * 0.1 + taxSatisfactionDelta(taxPolicy, estate.name)) *
+      timeMultiplier;
+    estate.satisfaction = clamp(
+      estate.satisfaction + satisfactionDelta - timeMultiplier,
+      10,
+      90
+    );
 
-    const influenceDelta = favoredSpend * 0.02 - 0.1;
+    const influenceDelta = (favoredSpend * 0.02 - 0.1) * timeMultiplier;
     estate.influence = clamp(estate.influence + influenceDelta, 5, 40);
 
     if (estate.satisfaction < 35) {
@@ -235,14 +253,14 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   const estates: Estate[] = config.estates.map((estate) => ({ ...estate }));
   const departments: DepartmentState[] = config.departments.map((department) => ({ ...department }));
 
-  const reports: MonthlyReport[] = [];
+  const reports: QuarterReport[] = [];
   let totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
-  let totalExpenses: MonthlyExpenses = {
+  let totalExpenses: QuarterlyExpenses = {
     departments: Object.fromEntries(DEPARTMENTS.map((department) => [department, 0])) as Record<Department, number>,
     total: 0,
   };
 
-  for (let month = 1; month <= config.months; month += 1) {
+  for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
     const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
     const loyaltyModifier = taxLoyaltyModifier(config.decree.taxPolicy);
     const economyEfficiency = departments.find((d) => d.name === "economy")?.efficiency ?? 1;
@@ -255,7 +273,8 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
           decreeTaxModifier,
           economyEfficiency,
           scienceEfficiency,
-          config.decree.investmentPriority
+          config.decree.investmentPriority,
+          QUARTER_DURATION
         )
       )
     );
@@ -279,7 +298,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       config.decree.investmentPriority
     );
 
-    const availableBudget = Math.min(config.baseMonthlyBudget, resources.gold * 0.6);
+    const availableBudget = Math.min(config.baseQuarterBudget, resources.gold * 0.6);
     let spending: Record<Department, number> = {} as Record<Department, number>;
     let plannedTotal = 0;
     for (const department of DEPARTMENTS) {
@@ -296,7 +315,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       plannedTotal = resources.gold;
     }
 
-    const expenses: MonthlyExpenses = {
+    const expenses: QuarterlyExpenses = {
       departments: Object.fromEntries(
         DEPARTMENTS.map((department) => [department, Number(spending[department].toFixed(2))])
       ) as Record<Department, number>,
@@ -314,17 +333,29 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       resources.gold = 0;
     }
 
-    updateDepartmentState(departments, spending, config.baseMonthlyBudget, config.decree.investmentPriority);
+    updateDepartmentState(
+      departments,
+      spending,
+      config.baseQuarterBudget,
+      config.decree.investmentPriority,
+      QUARTER_DURATION
+    );
     const regionEvents = updateRegions(
       regions,
       spending,
       config.decree.investmentPriority,
-      loyaltyModifier
+      loyaltyModifier,
+      QUARTER_DURATION
     );
-    const estateEvents = updateEstates(estates, spending, config.decree.taxPolicy);
+    const estateEvents = updateEstates(
+      estates,
+      spending,
+      config.decree.taxPolicy,
+      QUARTER_DURATION
+    );
 
     const events: SimulationEvent[] = [...regionEvents, ...estateEvents];
-    if (resources.gold < config.baseMonthlyBudget * 0.3) {
+    if (resources.gold < config.baseQuarterBudget * 0.3) {
       events.push({
         description: "Казна близка к нулю, совет требует пересмотра бюджета",
         severity: "moderate",
@@ -332,7 +363,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     }
 
     reports.push({
-      month,
+      quarter,
       incomes: {
         gold: Number(incomes.gold.toFixed(2)),
         influence: Number(incomes.influence.toFixed(2)),

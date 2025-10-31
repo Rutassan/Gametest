@@ -12,8 +12,8 @@ const decree = {
 };
 
 const config: SimulationConfig = {
-  months: 12,
-  baseMonthlyBudget: 140,
+  quarters: 4,
+  baseQuarterBudget: 420,
   initialResources,
   regions,
   estates,
@@ -24,9 +24,9 @@ const config: SimulationConfig = {
 
 const result = runSimulation(config);
 
-console.log("=== Ежемесячный отчёт ===");
+console.log("=== Ежеквартальный отчёт ===");
 for (const report of result.reports) {
-  console.log(`\nМесяц ${report.month}`);
+  console.log(`\nКвартал ${report.quarter}`);
   console.log(
     `Доходы: золото ${report.incomes.gold.toFixed(1)}, влияние ${report.incomes.influence.toFixed(1)}, рабочая сила ${report.incomes.labor.toFixed(1)}`
   );
