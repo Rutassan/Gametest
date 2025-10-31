@@ -75,7 +75,7 @@ export interface Advisor {
   allocateBudget(context: AdvisorContext): BudgetAllocation;
 }
 
-export interface MonthlyExpenses {
+export interface QuarterlyExpenses {
   departments: Record<Department, number>;
   total: number;
 }
@@ -98,10 +98,10 @@ export interface RegionSnapshot {
   infrastructure: number;
 }
 
-export interface MonthlyReport {
-  month: number;
+export interface QuarterReport {
+  quarter: number;
   incomes: ResourcePool;
-  expenses: MonthlyExpenses;
+  expenses: QuarterlyExpenses;
   treasury: ResourcePool;
   estates: EstateSnapshot[];
   regions: RegionSnapshot[];
@@ -109,8 +109,11 @@ export interface MonthlyReport {
 }
 
 export interface SimulationConfig {
-  months: number;
-  baseMonthlyBudget: number;
+  quarters: number;
+  /**
+   * Базовый бюджет на один квартал (3 месяца) до распределения советником.
+   */
+  baseQuarterBudget: number;
   initialResources: ResourcePool;
   regions: Region[];
   estates: Estate[];
@@ -120,10 +123,10 @@ export interface SimulationConfig {
 }
 
 export interface SimulationResult {
-  reports: MonthlyReport[];
+  reports: QuarterReport[];
   totals: {
     incomes: ResourcePool;
-    expenses: MonthlyExpenses;
+    expenses: QuarterlyExpenses;
   };
   finalState: {
     resources: ResourcePool;
