@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "build": "tsc",
-    "simulate": "ts-node src/index.ts"
+    "simulate": "ts-node src/index.ts",
+    "dashboard": "ts-node src/ui.ts"
   },
   "keywords": [],
   "author": "",

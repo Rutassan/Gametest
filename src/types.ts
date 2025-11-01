@@ -38,6 +38,11 @@ export interface Estate {
   favoredDepartment: Department;
 }
 
+export interface TrustLevels {
+  advisor: number;
+  estates: Record<string, number>;
+}
+
 export interface DepartmentState {
   name: Department;
   efficiency: number;
@@ -65,6 +70,7 @@ export interface AdvisorContext {
   estates: Estate[];
   departments: DepartmentState[];
   decree: Decree;
+  trust: TrustLevels;
 }
 
 export type BudgetAllocation = Partial<Record<Department, number>>;
@@ -129,6 +135,16 @@ export interface SimulationEventEscalation {
   description: string;
 }
 
+export interface EventOrigin {
+  regionName?: string;
+  estateName?: string;
+  milestone?: number;
+  loyalty?: number;
+  satisfaction?: number;
+  treasury?: number;
+  source?: string;
+}
+
 export interface SimulationEvent {
   id: string;
   title: string;
@@ -141,6 +157,7 @@ export interface SimulationEvent {
   failure: SimulationEventFailure;
   severity: "minor" | "moderate" | "major";
   escalation?: SimulationEventEscalation[];
+  origin?: EventOrigin;
 }
 
 export interface EstateSnapshot {
@@ -171,6 +188,44 @@ export interface KPIReport {
   activeCrises: KPIEntry;
 }
 
+export interface EventDecisionContext {
+  quarter: number;
+  resources: ResourcePool;
+  estates: Estate[];
+  regions: Region[];
+  departments: DepartmentState[];
+  trust: TrustLevels;
+  kpis: KPIReport | null;
+}
+
+export interface EventResolution {
+  optionId: string | null;
+  notes?: string;
+  defer?: boolean;
+}
+
+export type EventDecisionStrategy = (
+  event: SimulationEvent,
+  context: EventDecisionContext
+) => EventResolution;
+
+export type EventOutcomeStatus = "resolved" | "failed" | "deferred";
+
+export interface EventOutcome {
+  event: SimulationEvent;
+  status: EventOutcomeStatus;
+  selectedOptionId?: string | null;
+  appliedEffects: SimulationEventEffect[];
+  notes?: string;
+}
+
+export interface ActiveEvent {
+  event: SimulationEvent;
+  remainingTime: number;
+  originQuarter: number;
+  escalated?: boolean;
+}
+
 export interface QuarterlyReport {
   quarter: number;
   incomes: ResourcePool;
@@ -178,8 +233,10 @@ export interface QuarterlyReport {
   treasury: ResourcePool;
   estates: EstateSnapshot[];
   regions: RegionSnapshot[];
-  events: SimulationEvent[];
+  events: EventOutcome[];
   kpis: KPIReport;
+  trust: TrustLevels;
+  activeThreatLevel: number;
 }
 
 export interface SimulationConfig {
@@ -194,6 +251,8 @@ export interface SimulationConfig {
   departments: DepartmentState[];
   advisor: Advisor;
   decree: Decree;
+  initialTrust?: TrustLevels;
+  eventDecisionStrategy?: EventDecisionStrategy;
 }
 
 export interface KPIAverages {
@@ -218,5 +277,7 @@ export interface SimulationResult {
     regions: Region[];
     estates: Estate[];
     departments: DepartmentState[];
+    trust: TrustLevels;
+    activeThreatLevel: number;
   };
 }

@@ -1,10 +1,15 @@
 import {
+  ActiveEvent,
   Advisor,
   AdvisorContext,
   DEPARTMENTS,
   Department,
   DepartmentState,
   Estate,
+  EventDecisionContext,
+  EventDecisionStrategy,
+  EventOutcome,
+  EventResolution,
   KPIEntry,
   KPIReport,
   QuarterlyReport,
@@ -15,11 +20,17 @@ import {
   InvestmentPriority,
   TaxPolicy,
   SimulationEvent,
+  SimulationEventCost,
+  SimulationEventOption,
+  SimulationEventEffect,
   SimulationResult,
   ThreatLevel,
+  TrustLevels,
 } from "./types";
 import {
+  EventTemplateContext,
   createEstateDissatisfactionEvent,
+  createEventFromTemplate,
   createInfrastructureMilestoneEvent,
   createLoyaltyDeclineEvent,
   createTreasuryDepletionEvent,
@@ -33,6 +44,19 @@ import {
 } from "./decrees";
 
 const QUARTER_DURATION = 3;
+
+interface TimedEffect {
+  effect: SimulationEventEffect;
+  remaining: number;
+  source: string;
+}
+
+interface GlobalModifiers {
+  stability: number;
+  threat: number;
+  budget: number;
+  reputation: Record<string, number>;
+}
 
 function cloneResources(pool: ResourcePool): ResourcePool {
   return { gold: pool.gold, influence: pool.influence, labor: pool.labor };
@@ -64,6 +88,480 @@ function scaleResources(pool: ResourcePool, factor: number): ResourcePool {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+function initializeTrustLevels(estates: Estate[], initial?: TrustLevels): TrustLevels {
+  const base: TrustLevels = {
+    advisor: initial?.advisor ?? 0.6,
+    estates: {},
+  };
+
+  for (const estate of estates) {
+    const existing = initial?.estates?.[estate.name];
+    base.estates[estate.name] = existing !== undefined ? existing : clamp(estate.satisfaction / 100, 0.25, 0.85);
+  }
+
+  return base;
+}
+
+function cloneTrustLevels(trust: TrustLevels): TrustLevels {
+  return {
+    advisor: trust.advisor,
+    estates: Object.fromEntries(Object.entries(trust.estates)) as Record<string, number>,
+  };
+}
+
+function updateEstateTrust(trust: TrustLevels, estates: Estate[]) {
+  for (const estate of estates) {
+    const normalized = clamp(estate.satisfaction / 100, 0.1, 0.95);
+    trust.estates[estate.name] = normalized;
+  }
+}
+
+function adjustAdvisorTrust(trust: TrustLevels, delta: number) {
+  trust.advisor = clamp(Number((trust.advisor + delta).toFixed(3)), 0.1, 0.95);
+}
+
+function adjustEstateTrust(trust: TrustLevels, estateName: string | undefined, delta: number) {
+  if (!estateName) {
+    return;
+  }
+  const current = trust.estates[estateName] ?? 0.5;
+  trust.estates[estateName] = clamp(Number((current + delta).toFixed(3)), 0.1, 0.95);
+}
+
+function severityWeight(event: SimulationEvent): number {
+  switch (event.severity) {
+    case "major":
+      return 0.05;
+    case "moderate":
+      return 0.03;
+    default:
+      return 0.015;
+  }
+}
+
+function canAfford(cost: SimulationEventCost | undefined, resources: ResourcePool): boolean {
+  if (!cost) {
+    return true;
+  }
+  if (cost.gold !== undefined && resources.gold < cost.gold) {
+    return false;
+  }
+  if (cost.influence !== undefined && resources.influence < cost.influence) {
+    return false;
+  }
+  if (cost.labor !== undefined && resources.labor < cost.labor) {
+    return false;
+  }
+  return true;
+}
+
+function applyCost(cost: SimulationEventCost | undefined, resources: ResourcePool) {
+  if (!cost) {
+    return;
+  }
+  if (cost.gold) {
+    resources.gold = Math.max(0, resources.gold - cost.gold);
+  }
+  if (cost.influence) {
+    resources.influence = Math.max(0, resources.influence - cost.influence);
+  }
+  if (cost.labor) {
+    resources.labor = Math.max(0, resources.labor - cost.labor);
+  }
+}
+
+function estimateOptionValue(option: SimulationEventOption): number {
+  const costPenalty =
+    (option.cost?.gold ?? 0) * 0.8 + (option.cost?.influence ?? 0) * 1.1 + (option.cost?.labor ?? 0) * 0.3;
+  const effectScore = option.effects.reduce((acc, effect) => acc + effect.value, 0);
+  return effectScore - costPenalty;
+}
+
+const defaultDecisionStrategy: EventDecisionStrategy = (event, context) => {
+  const affordableOptions = event.options.filter((option) => canAfford(option.cost, context.resources));
+  if (affordableOptions.length === 0) {
+    return { optionId: null, defer: true, notes: "Недостаточно ресурсов" };
+  }
+
+  const prioritized = affordableOptions
+    .map((option) => ({ option, score: estimateOptionValue(option) }))
+    .sort((a, b) => b.score - a.score);
+
+  const chosen = prioritized[0];
+  if (!chosen) {
+    return { optionId: null, defer: true };
+  }
+
+  return { optionId: chosen.option.id };
+};
+
+function findRegionByName(regions: Region[], name: string | undefined): Region | undefined {
+  if (!name) {
+    return undefined;
+  }
+  return regions.find((region) => region.name === name);
+}
+
+function findEstateByName(estates: Estate[], name: string | undefined): Estate | undefined {
+  if (!name) {
+    return undefined;
+  }
+  return estates.find((estate) => estate.name === name);
+}
+
+function scheduleTimedEffect(
+  timedEffects: TimedEffect[],
+  effect: SimulationEventEffect,
+  source: string
+) {
+  if (!effect.duration || effect.duration <= 1) {
+    return;
+  }
+  timedEffects.push({
+    effect: { ...effect, duration: undefined },
+    remaining: effect.duration - 1,
+    source,
+  });
+}
+
+function applyEventEffect(
+  effect: SimulationEventEffect,
+  resources: ResourcePool,
+  regions: Region[],
+  estates: Estate[],
+  modifiers: GlobalModifiers,
+  timedEffects: TimedEffect[],
+  source: string
+) {
+  const { type, target, value } = effect;
+  const normalizedTarget = target?.toLowerCase() ?? "";
+
+  switch (type) {
+    case "treasury":
+      if (target === "gold") {
+        resources.gold = Math.max(0, resources.gold + value);
+      } else if (target === "influence") {
+        resources.influence = Math.max(0, resources.influence + value);
+      } else if (target === "labor") {
+        resources.labor = Math.max(0, resources.labor + value);
+      }
+      break;
+    case "infrastructure": {
+      const region = findRegionByName(regions, target);
+      if (region) {
+        region.infrastructure = clamp(region.infrastructure + value, 0, 150);
+      } else if (!target || normalizedTarget === "all") {
+        for (const r of regions) {
+          r.infrastructure = clamp(r.infrastructure + value, 0, 150);
+        }
+      }
+      break;
+    }
+    case "wealth": {
+      if (normalizedTarget === "торговые провинции") {
+        for (const region of regions) {
+          if (region.specialization === "trade") {
+            region.wealth = Math.max(5, region.wealth + value);
+          }
+        }
+      } else {
+        const region = findRegionByName(regions, target);
+        if (region) {
+          region.wealth = Math.max(5, region.wealth + value);
+        }
+      }
+      break;
+    }
+    case "loyalty": {
+      const region = findRegionByName(regions, target);
+      if (region) {
+        region.loyalty = clamp(region.loyalty + value, 0, 100);
+      } else if (!target || normalizedTarget === "империя") {
+        for (const r of regions) {
+          r.loyalty = clamp(r.loyalty + value, 0, 100);
+        }
+      }
+      break;
+    }
+    case "influence": {
+      resources.influence = Math.max(0, resources.influence + value);
+      break;
+    }
+    case "satisfaction": {
+      const estate = findEstateByName(estates, target);
+      if (estate) {
+        estate.satisfaction = clamp(estate.satisfaction + value, 0, 100);
+      }
+      break;
+    }
+    case "stability":
+      modifiers.stability += value;
+      break;
+    case "reputation": {
+      const key = normalizedTarget || "empire";
+      modifiers.reputation[key] = (modifiers.reputation[key] ?? 0) + value;
+      break;
+    }
+    case "threat":
+      modifiers.threat += value;
+      break;
+    case "budget":
+      modifiers.budget += value;
+      break;
+    case "unrest":
+      modifiers.stability -= value;
+      break;
+    default:
+      break;
+  }
+
+  scheduleTimedEffect(timedEffects, effect, source);
+}
+
+function applyTimedEffects(
+  timedEffects: TimedEffect[],
+  resources: ResourcePool,
+  regions: Region[],
+  estates: Estate[],
+  modifiers: GlobalModifiers
+) {
+  for (let i = timedEffects.length - 1; i >= 0; i -= 1) {
+    const timed = timedEffects[i];
+    applyEventEffect(timed.effect, resources, regions, estates, modifiers, [] as TimedEffect[], timed.source);
+    timed.remaining -= 1;
+    if (timed.remaining <= 0) {
+      timedEffects.splice(i, 1);
+    }
+  }
+}
+
+function buildContextFromOrigin(
+  origin: SimulationEvent["origin"],
+  regions: Region[],
+  estates: Estate[]
+): EventTemplateContext {
+  if (!origin) {
+    return {};
+  }
+
+  const context: EventTemplateContext = {};
+  if (origin.regionName) {
+    context.region = findRegionByName(regions, origin.regionName);
+  }
+  if (origin.estateName) {
+    context.estate = findEstateByName(estates, origin.estateName);
+  }
+  if (origin.milestone !== undefined) {
+    context.milestone = origin.milestone;
+  }
+  if (origin.loyalty !== undefined) {
+    context.loyalty = origin.loyalty;
+  }
+  if (origin.satisfaction !== undefined) {
+    context.satisfaction = origin.satisfaction;
+  }
+  if (origin.treasury !== undefined) {
+    context.treasury = origin.treasury;
+  }
+  if (origin.source) {
+    context.source = origin.source;
+  }
+
+  return context;
+}
+
+function generateKpiEvents(kpis: KPIReport, regions: Region[]): SimulationEvent[] {
+  const events: SimulationEvent[] = [];
+
+  if (kpis.stability.threatLevel !== "low") {
+    const lowestLoyaltyRegion = [...regions].sort((a, b) => a.loyalty - b.loyalty)[0];
+    events.push(
+      createEventFromTemplate("kpi.stability.crisis", { region: lowestLoyaltyRegion })
+    );
+  }
+
+  if (kpis.economicGrowth.value <= 0) {
+    events.push(createEventFromTemplate("kpi.economy.recession", {}));
+  }
+
+  if (kpis.securityIndex.threatLevel !== "low") {
+    const borderRegion = [...regions].sort((a, b) => a.loyalty - b.loyalty)[0];
+    events.push(
+      createEventFromTemplate("kpi.security.alert", { region: borderRegion })
+    );
+  }
+
+  return events;
+}
+
+function enqueueEvents(
+  activeEvents: ActiveEvent[],
+  incoming: SimulationEvent[],
+  quarter: number
+) {
+  for (const event of incoming) {
+    const timeout = event.failure?.timeout ?? 1;
+    const existing = activeEvents.find(
+      (entry) =>
+        entry.event.id === event.id &&
+        entry.event.origin?.regionName === event.origin?.regionName &&
+        entry.event.origin?.estateName === event.origin?.estateName
+    );
+    if (existing) {
+      existing.remainingTime = Math.max(existing.remainingTime, timeout);
+      continue;
+    }
+
+    activeEvents.push({
+      event,
+      remainingTime: timeout,
+      originQuarter: quarter,
+      escalated: false,
+    });
+  }
+}
+
+function resolveEventsForQuarter(
+  quarter: number,
+  activeEvents: ActiveEvent[],
+  newEvents: SimulationEvent[],
+  decisionStrategy: EventDecisionStrategy,
+  buildContext: () => EventDecisionContext,
+  resources: ResourcePool,
+  regions: Region[],
+  estates: Estate[],
+  modifiers: GlobalModifiers,
+  timedEffects: TimedEffect[],
+  trust: TrustLevels
+): EventOutcome[] {
+  const outcomes: EventOutcome[] = [];
+  enqueueEvents(activeEvents, newEvents, quarter);
+
+  for (let index = 0; index < activeEvents.length; index += 1) {
+    const active = activeEvents[index];
+    const context = buildContext();
+    const resolution: EventResolution = decisionStrategy(active.event, context);
+
+    if (resolution.defer || resolution.optionId === null) {
+      active.remainingTime -= 1;
+      outcomes.push({
+        event: active.event,
+        status: "deferred",
+        selectedOptionId: null,
+        appliedEffects: [],
+        notes: resolution.notes,
+      });
+
+      if (active.remainingTime <= 0) {
+        const failureEffects = active.event.failure.effects ?? [];
+        for (const effect of failureEffects) {
+          applyEventEffect(effect, resources, regions, estates, modifiers, timedEffects, active.event.id);
+        }
+        outcomes.push({
+          event: active.event,
+          status: "failed",
+          selectedOptionId: null,
+          appliedEffects: failureEffects,
+          notes: "Провал из-за истечения времени",
+        });
+        adjustAdvisorTrust(trust, -severityWeight(active.event));
+        adjustEstateTrust(trust, active.event.origin?.estateName, -0.03);
+        activeEvents.splice(index, 1);
+        index -= 1;
+      }
+      continue;
+    }
+
+    const option = active.event.options.find((candidate) => candidate.id === resolution.optionId);
+    if (!option || !canAfford(option.cost, resources)) {
+      active.remainingTime -= 1;
+      outcomes.push({
+        event: active.event,
+        status: "deferred",
+        selectedOptionId: option?.id ?? null,
+        appliedEffects: [],
+        notes: !option ? "Опция не найдена" : "Недостаточно ресурсов для выбранной опции",
+      });
+
+      if (active.remainingTime <= 0) {
+        const failureEffects = active.event.failure.effects ?? [];
+        for (const effect of failureEffects) {
+          applyEventEffect(effect, resources, regions, estates, modifiers, timedEffects, active.event.id);
+        }
+        outcomes.push({
+          event: active.event,
+          status: "failed",
+          selectedOptionId: option?.id ?? null,
+          appliedEffects: failureEffects,
+          notes: "Провал из-за истечения времени",
+        });
+        adjustAdvisorTrust(trust, -severityWeight(active.event));
+        adjustEstateTrust(trust, active.event.origin?.estateName, -0.035);
+        activeEvents.splice(index, 1);
+        index -= 1;
+      }
+      continue;
+    }
+
+    applyCost(option.cost, resources);
+    const appliedEffects: SimulationEventEffect[] = [];
+    for (const effect of option.effects) {
+      applyEventEffect(effect, resources, regions, estates, modifiers, timedEffects, active.event.id);
+      appliedEffects.push(effect);
+    }
+
+    const followUps: SimulationEvent[] = [];
+    if (option.followUps && option.followUps.length > 0) {
+      const baseContext = buildContextFromOrigin(active.event.origin, regions, estates);
+      baseContext.treasury = resources.gold;
+      baseContext.loyalty = baseContext.region?.loyalty ?? baseContext.loyalty;
+      baseContext.satisfaction = baseContext.estate?.satisfaction ?? baseContext.satisfaction;
+
+      for (const followUpId of option.followUps) {
+        try {
+          followUps.push(createEventFromTemplate(followUpId as any, baseContext));
+        } catch (error) {
+          // ignore unknown templates for now
+        }
+      }
+    }
+
+    if (active.event.escalation) {
+      const baseContext = buildContextFromOrigin(active.event.origin, regions, estates);
+      baseContext.treasury = resources.gold;
+      for (const escalation of active.event.escalation) {
+        if (Math.random() < escalation.chance) {
+          try {
+            followUps.push(createEventFromTemplate(escalation.followUp as any, baseContext));
+          } catch (error) {
+            // ignore unknown templates
+          }
+        }
+      }
+    }
+
+    if (followUps.length > 0) {
+      enqueueEvents(activeEvents, followUps, quarter);
+    }
+
+    outcomes.push({
+      event: active.event,
+      status: "resolved",
+      selectedOptionId: option.id,
+      appliedEffects,
+      notes: resolution.notes,
+    });
+
+    adjustAdvisorTrust(trust, severityWeight(active.event));
+    adjustEstateTrust(trust, active.event.origin?.estateName, 0.025);
+
+    activeEvents.splice(index, 1);
+    index -= 1;
+  }
+
+  return outcomes;
 }
 
 type KPIMetric = keyof KPIReport;
@@ -124,9 +622,10 @@ function calculateRegionIncome(
   economyEfficiency: number,
   scienceEfficiency: number,
   decreePriority: InvestmentPriority,
-  timeMultiplier: number
+  timeMultiplier: number,
+  stabilityModifier: number
 ): ResourcePool {
-  const loyaltyFactor = clamp(region.loyalty / 100, 0.3, 1.2);
+  const loyaltyFactor = clamp(region.loyalty / 100 + stabilityModifier * 0.01, 0.3, 1.3);
   const infrastructureFactor = 1 + region.infrastructure / 120;
   const specializationFactor = priorityDevelopmentMultiplier(
     decreePriority,
@@ -306,6 +805,15 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   const regions: Region[] = config.regions.map((region) => ({ ...region }));
   const estates: Estate[] = config.estates.map((estate) => ({ ...estate }));
   const departments: DepartmentState[] = config.departments.map((department) => ({ ...department }));
+  const trust = initializeTrustLevels(estates, config.initialTrust);
+  const modifiers: GlobalModifiers = {
+    stability: 0,
+    threat: 0,
+    budget: 0,
+    reputation: {},
+  };
+  const timedEffects: TimedEffect[] = [];
+  const activeEvents: ActiveEvent[] = [];
 
   const reports: QuarterlyReport[] = [];
   let totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
@@ -319,8 +827,14 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   let previousGrowth: number | null = null;
   let previousSecurity: number | null = null;
   let previousCrises: number | null = null;
+  let latestKPI: KPIReport | null = null;
+
+  const decisionStrategy: EventDecisionStrategy =
+    config.eventDecisionStrategy ?? defaultDecisionStrategy;
 
   for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
+    applyTimedEffects(timedEffects, resources, regions, estates, modifiers);
+
     const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
     const loyaltyModifier = taxLoyaltyModifier(config.decree.taxPolicy);
     const economyEfficiency = departments.find((d) => d.name === "economy")?.efficiency ?? 1;
@@ -334,7 +848,8 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
           economyEfficiency,
           scienceEfficiency,
           config.decree.investmentPriority,
-          QUARTER_DURATION
+          QUARTER_DURATION,
+          modifiers.stability
         )
       )
     );
@@ -350,6 +865,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       estates,
       departments,
       decree: config.decree,
+      trust: cloneTrustLevels(trust),
     };
 
     const allocation = normalizeAllocationWithDecree(
@@ -358,9 +874,11 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       config.decree.investmentPriority
     );
 
-    const availableBudget = Math.min(config.baseQuarterBudget, resources.gold * 0.6);
-    let spending: Record<Department, number> = {} as Record<Department, number>;
+    const effectiveBaseBudget = Math.max(60, config.baseQuarterBudget + modifiers.budget);
+    const availableBudget = Math.min(effectiveBaseBudget, resources.gold * 0.7);
+    const spending: Record<Department, number> = {} as Record<Department, number>;
     let plannedTotal = 0;
+
     for (const department of DEPARTMENTS) {
       const value = allocation[department] * availableBudget;
       spending[department] = value;
@@ -388,18 +906,16 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
         (totalExpenses.departments[department] ?? 0) + expenses.departments[department];
     }
 
-    resources.gold -= expenses.total;
-    if (resources.gold < 0) {
-      resources.gold = 0;
-    }
+    resources.gold = Math.max(0, resources.gold - expenses.total);
 
     updateDepartmentState(
       departments,
       spending,
-      config.baseQuarterBudget,
+      effectiveBaseBudget,
       config.decree.investmentPriority,
       QUARTER_DURATION
     );
+
     const regionEvents = updateRegions(
       regions,
       spending,
@@ -414,20 +930,49 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       QUARTER_DURATION
     );
 
-    const events: SimulationEvent[] = [...regionEvents, ...estateEvents];
-    if (resources.gold < config.baseQuarterBudget * 0.3) {
-      events.push(createTreasuryDepletionEvent(resources.gold));
+    const generatedEvents: SimulationEvent[] = [...regionEvents, ...estateEvents];
+    if (resources.gold < effectiveBaseBudget * 0.3) {
+      generatedEvents.push(createTreasuryDepletionEvent(resources.gold));
     }
 
-    const averageLoyalty =
+    const quarterEvents = resolveEventsForQuarter(
+      quarter,
+      activeEvents,
+      generatedEvents,
+      decisionStrategy,
+      () => ({
+        quarter,
+        resources: { ...resources },
+        estates: estates.map((estate) => ({ ...estate })),
+        regions: regions.map((region) => ({ ...region })),
+        departments: departments.map((department) => ({ ...department })),
+        trust: cloneTrustLevels(trust),
+        kpis: latestKPI,
+      }),
+      resources,
+      regions,
+      estates,
+      modifiers,
+      timedEffects,
+      trust
+    );
+
+    const averageLoyaltyRaw =
       regions.reduce((acc, region) => acc + region.loyalty, 0) / regions.length;
+    const averageLoyalty = clamp(averageLoyaltyRaw + modifiers.stability, 0, 100);
     const totalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
     const economicGrowth = totalWealth - previousTotalWealth;
     const militarySpend = spending.military ?? 0;
-    const militaryShare = (militarySpend / Math.max(1, config.baseQuarterBudget)) * 100;
+    const militaryShare = (militarySpend / Math.max(1, effectiveBaseBudget)) * 100;
     const minLoyalty = Math.min(...regions.map((region) => region.loyalty));
-    const securityIndex = Math.min(minLoyalty, Math.min(100, militaryShare));
-    const activeCrises = events.filter((event) => event.severity !== "minor").length;
+    const threatPenalty = Math.max(0, modifiers.threat) * 5;
+    const securityIndex = clamp(
+      Math.min(minLoyalty, Math.min(100, militaryShare)) - threatPenalty,
+      0,
+      100
+    );
+    const activeCrises =
+      activeEvents.filter((event) => event.event.severity !== "minor").length;
 
     const kpis: KPIReport = {
       stability: createKPIEntry("stability", averageLoyalty, previousStability),
@@ -441,6 +986,38 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     previousGrowth = kpis.economicGrowth.value;
     previousSecurity = kpis.securityIndex.value;
     previousCrises = kpis.activeCrises.value;
+    latestKPI = kpis;
+
+    const kpiTriggeredEvents = generateKpiEvents(kpis, regions);
+    if (kpiTriggeredEvents.length > 0) {
+      enqueueEvents(activeEvents, kpiTriggeredEvents, quarter);
+      for (const event of kpiTriggeredEvents) {
+        quarterEvents.push({
+          event,
+          status: "deferred",
+          selectedOptionId: null,
+          appliedEffects: [],
+          notes: "Сформировано системой раннего предупреждения",
+        });
+      }
+    }
+
+    updateEstateTrust(trust, estates);
+
+    const hasFailures = quarterEvents.some((entry) => entry.status === "failed");
+    if (hasFailures) {
+      adjustAdvisorTrust(trust, -0.02);
+    } else if (quarterEvents.some((entry) => entry.status === "resolved" && entry.event.severity !== "minor")) {
+      adjustAdvisorTrust(trust, 0.01);
+    }
+
+    if (kpis.stability.trend > 0) {
+      adjustAdvisorTrust(trust, 0.005);
+    } else if (kpis.stability.trend < 0) {
+      adjustAdvisorTrust(trust, -0.005);
+    }
+
+    const trustSnapshot = cloneTrustLevels(trust);
 
     reports.push({
       quarter,
@@ -457,9 +1034,18 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       },
       estates: snapshotEstates(estates),
       regions: snapshotRegions(regions),
-      events,
+      events: quarterEvents,
       kpis,
+      trust: trustSnapshot,
+      activeThreatLevel: Number(modifiers.threat.toFixed(2)),
     });
+
+    modifiers.stability = Number((modifiers.stability * 0.85).toFixed(2));
+    modifiers.threat = Number((modifiers.threat * 0.9).toFixed(2));
+    modifiers.budget = Number((modifiers.budget * 0.75).toFixed(2));
+    for (const key of Object.keys(modifiers.reputation)) {
+      modifiers.reputation[key] = Number((modifiers.reputation[key] * 0.9).toFixed(2));
+    }
   }
 
   const kpiAverages = reports.reduce(
@@ -511,6 +1097,8 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       regions,
       estates,
       departments,
+      trust: cloneTrustLevels(trust),
+      activeThreatLevel: Number(modifiers.threat.toFixed(2)),
     },
   };
 }

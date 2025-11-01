@@ -1,4 +1,12 @@
-import { Estate, Region, SimulationEvent, SimulationEventFailure, SimulationEventOption } from "./types";
+import {
+  Estate,
+  EventOrigin,
+  Region,
+  SimulationEvent,
+  SimulationEventFailure,
+  SimulationEventOption,
+  ThreatLevel,
+} from "./types";
 
 export interface EventTemplateContext {
   region?: Region;
@@ -7,6 +15,9 @@ export interface EventTemplateContext {
   loyalty?: number;
   satisfaction?: number;
   treasury?: number;
+  metric?: string;
+  threatLevel?: ThreatLevel;
+  source?: string;
 }
 
 interface EventTemplateDefinition {
@@ -1053,6 +1064,189 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
       ],
     }),
   },
+  "kpi.stability.crisis": {
+    id: "kpi.stability.crisis",
+    category: "Социальные потрясения",
+    severity: "moderate",
+    title: ({ region }) =>
+      region
+        ? `Население ${region.name} требует гарантий и защиты`
+        : "Лояльность населения по всей империи снижается",
+    description: ({ region }) =>
+      region
+        ? `Слухи о беспорядках в ${region.name} распространяются по всей стране. Люди ожидают вмешательства власти.`
+        : "Советники предупреждают о росте недовольства в низших сословиях и готовности к протестам.",
+    factions: ({ region }) =>
+      region ? ["Корона / центральная власть", region.name] : ["Корона / центральная власть", "крестьянство"],
+    triggers: ({ region }) => [
+      "metric:stability",
+      region ? `metric:regions.${region.name}.loyalty` : "metric:loyalty",
+    ],
+    conditions: ({ region }) => ({
+      metrics: {
+        stability: "<= 55",
+        ...(region ? { [`regions.${region.name}.loyalty`]: "<= 45" } : {}),
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "deploy_mediators",
+        description: "Отправить внутренних инспекторов и выделить средства на местные проекты",
+        cost: { influence: 4, gold: 35 },
+        effects: region
+          ? [
+              { type: "loyalty", target: region.name, value: 4 },
+              { type: "stability", target: "империя", value: 1, duration: 2 },
+            ]
+          : [
+              { type: "stability", target: "империя", value: 2, duration: 2 },
+            ],
+      },
+      {
+        id: "promise_reforms",
+        description: "Пообещать реформы и снизить налоговое давление",
+        cost: { influence: 3 },
+        effects: region
+          ? [
+              { type: "loyalty", target: region.name, value: 2 },
+              { type: "treasury", target: "gold", value: -25 },
+            ]
+          : [
+              { type: "treasury", target: "gold", value: -35 },
+              { type: "stability", target: "империя", value: 1 },
+            ],
+        followUps: ["estate.dissatisfaction"],
+      },
+    ],
+    failure: ({ region }) => ({
+      timeout: 1,
+      description: "Протесты перерастают в очаги неповиновения и подрывают легитимность власти.",
+      effects: region
+        ? [
+            { type: "loyalty", target: region.name, value: -5 },
+            { type: "stability", target: "империя", value: -2 },
+          ]
+        : [
+            { type: "stability", target: "империя", value: -3 },
+          ],
+    }),
+    escalation: ({ region }) =>
+      region
+        ? [
+            {
+              chance: 0.2,
+              followUp: "region.loyalty.decline",
+              description: `Неспособность урегулировать кризис в ${region.name} может привести к открытому бунту.`,
+            },
+          ]
+        : undefined,
+  },
+  "kpi.economy.recession": {
+    id: "kpi.economy.recession",
+    category: "Экономический кризис",
+    severity: "moderate",
+    title: () => "Замедление экономики вызывает тревогу",
+    description: () =>
+      "Министры сообщают о первых признаках рецессии: доходы падают, а торговля замедляется.",
+    factions: () => ["Гильдии купцов", "Корона / центральная власть"],
+    triggers: () => ["metric:economicGrowth"],
+    conditions: () => ({
+      metrics: {
+        economicGrowth: "<= 0",
+      },
+    }),
+    options: () => [
+      {
+        id: "stimulus_package",
+        description: "Запустить программу стимулирования торговли и инфраструктуры",
+        cost: { gold: 70, influence: 3 },
+        effects: [
+          { type: "treasury", target: "gold", value: -30 },
+          { type: "wealth", target: "торговые провинции", value: 4, duration: 2 },
+        ],
+      },
+      {
+        id: "austerity",
+        description: "Сократить расходы и выровнять бюджет до улучшения показателей",
+        effects: [
+          { type: "budget", target: "all", value: -10 },
+          { type: "stability", target: "империя", value: -1 },
+        ],
+        followUps: ["treasury.recovery_plan"],
+      },
+    ],
+    failure: () => ({
+      timeout: 1,
+      description: "Продуктивные силы деградируют, торговля стагнирует.",
+      effects: [
+        { type: "wealth", target: "торговые провинции", value: -3 },
+        { type: "stability", target: "империя", value: -1 },
+      ],
+    }),
+  },
+  "kpi.security.alert": {
+    id: "kpi.security.alert",
+    category: "Военные угрозы",
+    severity: "moderate",
+    title: ({ region }) =>
+      region
+        ? `Пограничные дозоры ${region.name} сообщают о росте угроз`
+        : "Совет безопасности предупреждает об уязвимости границ",
+    description: ({ region }) =>
+      region
+        ? `Недофинансирование гарнизонов ${region.name} оставляет границы без защиты.`
+        : "Низкие военные расходы и слухи о бунтах ставят безопасность империи под угрозу.",
+    factions: ({ region }) =>
+      region ? ["Военное сословие / гарнизоны", region.name] : ["Военное сословие / гарнизоны"],
+    triggers: ({ region }) => [
+      "metric:securityIndex",
+      region ? `metric:regions.${region.name}.loyalty` : "metric:loyalty",
+    ],
+    conditions: () => ({
+      metrics: {
+        securityIndex: "<= 35",
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "mobilize_reserves",
+        description: "Увеличить военные ассигнования и усилить гарнизоны",
+        cost: { gold: 60, labor: 20 },
+        effects: [
+          { type: "treasury", target: "gold", value: -40 },
+          { type: "loyalty", target: region?.name ?? "", value: 3 },
+          { type: "threat", target: "border", value: -1 },
+        ],
+      },
+      {
+        id: "negotiate_truces",
+        description: "Использовать дипломатию, чтобы выиграть время",
+        cost: { influence: 6 },
+        effects: [
+          { type: "threat", target: "границы", value: -1 },
+          { type: "reputation", target: "Региональные элиты", value: 1 },
+        ],
+      },
+    ],
+    failure: ({ region }) => ({
+      timeout: 1,
+      description: "Пограничные инциденты учащаются, а гарнизоны теряют дисциплину.",
+      effects: [
+        { type: "threat", target: "border", value: 2 },
+        { type: "stability", target: "империя", value: -2 },
+        ...(region ? [{ type: "loyalty", target: region.name, value: -4 }] : []),
+      ],
+    }),
+    escalation: ({ region }) => [
+      {
+        chance: 0.25,
+        followUp: "treasury.depletion",
+        description: region
+          ? `Эскалация на границе ${region.name} грозит перерасти в полномасштабный конфликт.`
+          : "Продолжение кризиса приведёт к чрезвычайным расходам.",
+      },
+    ],
+  },
   "treasury.debt_payments": {
     id: "treasury.debt_payments",
     category: "Экономический кризис",
@@ -1208,6 +1402,27 @@ function instantiateEvent(
     event.escalation = escalation;
   }
 
+  const origin: EventOrigin = {
+    regionName: context.region?.name,
+    estateName: context.estate?.name,
+    milestone: context.milestone,
+    loyalty: context.loyalty,
+    satisfaction: context.satisfaction,
+    treasury: context.treasury,
+    source: context.source ?? templateId,
+  };
+
+  if (
+    origin.regionName ||
+    origin.estateName ||
+    origin.milestone !== undefined ||
+    origin.loyalty !== undefined ||
+    origin.satisfaction !== undefined ||
+    origin.treasury !== undefined
+  ) {
+    event.origin = origin;
+  }
+
   return event;
 }
 
@@ -1237,3 +1452,12 @@ export function createTreasuryDepletionEvent(treasury: number): SimulationEvent 
 }
 
 export const eventTemplates = EVENT_TEMPLATES;
+
+export type EventTemplateId = keyof typeof EVENT_TEMPLATES;
+
+export function createEventFromTemplate(
+  templateId: EventTemplateId,
+  context: EventTemplateContext
+): SimulationEvent {
+  return instantiateEvent(templateId, context);
+}

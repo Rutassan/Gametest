@@ -1,25 +1,11 @@
-import { BalancedChancellor, MilitaristMarshal, ReformistScholar } from "./advisors";
-import { departments, estates, initialResources, regions } from "./data";
+import { buildBaselineConfig } from "./config";
 import { runSimulation } from "./simulation";
 import {
   KPIEntry,
   KPIReport,
-  SimulationConfig,
-  SimulationEventCost,
   SimulationEventEffect,
-  SimulationEventEscalation,
   ThreatLevel,
 } from "./types";
-
-function formatCost(cost: SimulationEventCost | undefined): string {
-  if (!cost) {
-    return "";
-  }
-  const entries = Object.entries(cost).filter(([, value]) => value !== undefined);
-  return entries
-    .map(([resource, value]) => `${resource}: ${value}`)
-    .join(", ");
-}
 
 function formatEffects(effects: SimulationEventEffect[]): string {
   if (effects.length === 0) {
@@ -34,22 +20,6 @@ function formatEffects(effects: SimulationEventEffect[]): string {
     .join("; ");
 }
 
-function formatFollowUps(followUps: string[] | undefined): string {
-  if (!followUps || followUps.length === 0) {
-    return "";
-  }
-  return followUps.join(", ");
-}
-
-function formatEscalations(escalations: SimulationEventEscalation[] | undefined): string {
-  if (!escalations || escalations.length === 0) {
-    return "";
-  }
-  return escalations
-    .map((escalation) => `${Math.round(escalation.chance * 100)}% → ${escalation.followUp}: ${escalation.description}`)
-    .join("; ");
-}
-
 function formatTrend(trend: number): string {
   if (trend === 0) {
     return "0";
@@ -57,6 +27,10 @@ function formatTrend(trend: number): string {
   const prefix = trend > 0 ? "+" : "";
   const arrow = trend > 0 ? "↑" : "↓";
   return `${arrow} ${prefix}${trend.toFixed(2)}`;
+}
+
+function formatTrust(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
 }
 
 function describeThreat(level: ThreatLevel): string {
@@ -82,24 +56,7 @@ function logKPIBlock(report: KPIReport) {
   console.log(` • ${summarizeKPI("Активные кризисы", report.activeCrises)}`);
 }
 
-const advisor = new ReformistScholar();
-
-const decree = {
-  name: "Программа обновления инфраструктуры",
-  investmentPriority: "infrastructure" as const,
-  taxPolicy: "standard" as const,
-};
-
-const config: SimulationConfig = {
-  quarters: 4,
-  baseQuarterBudget: 420,
-  initialResources,
-  regions,
-  estates,
-  departments,
-  advisor,
-  decree,
-};
+const config = buildBaselineConfig();
 
 const result = runSimulation(config);
 
@@ -126,61 +83,52 @@ for (const report of result.reports) {
       .join(", ")
   );
   logKPIBlock(report.kpis);
+  console.log(
+    `Доверие советника: ${formatTrust(report.trust.advisor)}, индекс угроз: ${report.activeThreatLevel.toFixed(2)}`
+  );
+  const estatesTrustLine = Object.entries(report.trust.estates)
+    .map(([name, value]) => `${name}: ${formatTrust(value)}`)
+    .join(", ");
+  if (estatesTrustLine) {
+    console.log(`Доверие сословий: ${estatesTrustLine}`);
+  }
+
   if (report.events.length > 0) {
     console.log("События:");
-    for (const event of report.events) {
+    for (const outcome of report.events) {
+      const event = outcome.event;
       console.log(` • [${event.severity}] (${event.category}) ${event.title}`);
-      console.log(`   ${event.description}`);
-      if (event.factions.length > 0) {
-        console.log(`   Фракции: ${event.factions.join(", ")}`);
+      console.log(
+        `   Статус: ${outcome.status}${outcome.selectedOptionId ? " → " + outcome.selectedOptionId : ""}`
+      );
+      const contextDetails: string[] = [];
+      if (event.origin?.regionName) {
+        contextDetails.push(`регион ${event.origin.regionName}`);
       }
-      if (event.triggers.length > 0) {
-        console.log(`   Триггеры: ${event.triggers.join(", ")}`);
+      if (event.origin?.estateName) {
+        contextDetails.push(`сословие ${event.origin.estateName}`);
       }
-      const metricConditions = event.conditions.metrics ?? {};
-      const metricEntries = Object.entries(metricConditions);
-      if (metricEntries.length > 0) {
-        console.log(
-          `   Условия: ${metricEntries
-            .map(([metric, value]) => `${metric} ${value}`)
-            .join(", ")}`
-        );
+      if (contextDetails.length > 0) {
+        console.log(`   Контекст: ${contextDetails.join(", ")}`);
       }
-      if (event.conditions.flags && event.conditions.flags.length > 0) {
-        console.log(`   Флаги: ${event.conditions.flags.join(", ")}`);
-      }
-      if (event.options.length > 0) {
-        console.log("   Опции:");
-        for (const option of event.options) {
-          console.log(`     - (${option.id}) ${option.description}`);
-          const formattedCost = formatCost(option.cost);
-          if (formattedCost) {
-            console.log(`       Стоимость: ${formattedCost}`);
-          }
-          const formattedEffects = formatEffects(option.effects);
-          if (formattedEffects) {
-            console.log(`       Эффекты: ${formattedEffects}`);
-          }
-          const formattedFollowUps = formatFollowUps(option.followUps);
-          if (formattedFollowUps) {
-            console.log(`       Последующие события: ${formattedFollowUps}`);
-          }
-          if (option.cooldown !== undefined) {
-            console.log(`       Перезарядка: ${option.cooldown} ход(а)`);
-          }
+      console.log(`   Описание: ${event.description}`);
+      if (outcome.selectedOptionId) {
+        const chosen = event.options.find((option) => option.id === outcome.selectedOptionId);
+        if (chosen) {
+          console.log(`   Выбор: ${chosen.description}`);
         }
       }
-      const escalationSummary = formatEscalations(event.escalation);
-      if (escalationSummary) {
-        console.log(`   Эскалации: ${escalationSummary}`);
+      if (outcome.appliedEffects.length > 0) {
+        console.log(`   Эффекты: ${formatEffects(outcome.appliedEffects)}`);
       }
-      const failureIntro = event.failure.description
-        ? `${event.failure.description} Через ${event.failure.timeout} ход(а) автоматически:`
-        : `Через ${event.failure.timeout} ход(а) автоматически:`;
-      console.log(`   Провал: ${failureIntro}`);
-      const failureEffects = formatEffects(event.failure.effects);
-      if (failureEffects) {
-        console.log(`   Последствия провала: ${failureEffects}`);
+      if (outcome.notes) {
+        console.log(`   Примечание: ${outcome.notes}`);
+      }
+      if (outcome.status === "failed") {
+        const failureEffects = formatEffects(event.failure.effects);
+        if (failureEffects) {
+          console.log(`   Последствия провала: ${failureEffects}`);
+        }
       }
     }
   }
@@ -204,6 +152,15 @@ console.log(
     1
   )}, рабочая сила ${result.finalState.resources.labor.toFixed(1)}`
 );
+console.log(
+  `Доверие советника: ${formatTrust(result.finalState.trust.advisor)}, активный уровень угроз: ${result.finalState.activeThreatLevel.toFixed(2)}`
+);
+const finalEstateTrust = Object.entries(result.finalState.trust.estates)
+  .map(([name, value]) => `${name}: ${formatTrust(value)}`)
+  .join(", ");
+if (finalEstateTrust) {
+  console.log(`Доверие сословий к финалу: ${finalEstateTrust}`);
+}
 
 console.log("\nKPI-сводка за период:");
 if (result.kpiSummary.latest) {
