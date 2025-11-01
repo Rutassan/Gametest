@@ -2,6 +2,7 @@ import {
   ActiveEvent,
   Advisor,
   AdvisorContext,
+  AdvisorOutcomePreview,
   AgendaHighlight,
   CouncilMember,
   CouncilMemberState,
@@ -13,8 +14,12 @@ import {
   Estate,
   EventDecisionContext,
   EventDecisionStrategy,
+  EventInterventionDecision,
+  EventInterventionHandler,
+  EventInterventionLogEntry,
   EventOutcome,
   EventResolution,
+  InterventionDecisionMode,
   KPIEntry,
   KPIReport,
   MandateProgressReport,
@@ -45,6 +50,7 @@ import {
 } from "./types";
 import {
   EventTemplateContext,
+  buildEventInterventionPanel,
   createEstateDissatisfactionEvent,
   createEventFromTemplate,
   createInfrastructureMilestoneEvent,
@@ -1068,7 +1074,9 @@ function resolveEventsForQuarter(
   modifiers: GlobalModifiers,
   timedEffects: TimedEffect[],
   trust: TrustLevels,
-  postureSettings: ResponsePostureSettings
+  postureSettings: ResponsePostureSettings,
+  interventionHandler: EventInterventionHandler | undefined,
+  interventionLog: EventInterventionLogEntry[] | undefined
 ): EventOutcome[] {
   const outcomes: EventOutcome[] = [];
   enqueueEvents(activeEvents, newEvents, quarter);
@@ -1078,7 +1086,66 @@ function resolveEventsForQuarter(
     const context = buildContext();
     context.posture =
       postureSettings.perCategory?.[active.event.category] ?? postureSettings.default;
-    const resolution: EventResolution = decisionStrategy(active.event, context);
+    const advisorResolution = decisionStrategy(active.event, context);
+    const advisorPreview: AdvisorOutcomePreview = {
+      optionId: advisorResolution.optionId ?? null,
+      notes: advisorResolution.notes,
+    };
+
+    let resolution: EventResolution = advisorResolution;
+    let resolutionMode: InterventionDecisionMode = "council";
+
+    if (interventionHandler) {
+      const panel = buildEventInterventionPanel({
+        event: active.event,
+        context,
+        remainingTime: active.remainingTime,
+        quarter,
+        advisorPreview,
+      });
+
+      const decision: EventInterventionDecision = interventionHandler.present(panel, context);
+      resolutionMode = decision.mode;
+
+      if (decision.mode === "player") {
+        resolution = {
+          optionId: decision.optionId ?? null,
+          notes: decision.notes,
+          defer: decision.defer,
+        };
+      } else {
+        resolution = advisorResolution;
+      }
+
+      const logEntry: EventInterventionLogEntry = {
+        eventId: active.event.id,
+        eventTitle: active.event.title,
+        quarter,
+        mode: resolutionMode,
+        optionId: resolution.optionId ?? null,
+        notes: resolution.notes,
+        advisorOptionId: advisorPreview.optionId ?? null,
+        advisorNotes: advisorPreview.notes,
+        remainingTime: active.remainingTime,
+        timestamp: new Date().toISOString(),
+      };
+      interventionLog?.push(logEntry);
+      interventionHandler.record?.(logEntry);
+    } else {
+      const logEntry: EventInterventionLogEntry = {
+        eventId: active.event.id,
+        eventTitle: active.event.title,
+        quarter,
+        mode: resolutionMode,
+        optionId: resolution.optionId ?? null,
+        notes: resolution.notes,
+        advisorOptionId: advisorPreview.optionId ?? null,
+        advisorNotes: advisorPreview.notes,
+        remainingTime: active.remainingTime,
+        timestamp: new Date().toISOString(),
+      };
+      interventionLog?.push(logEntry);
+    }
 
     if (resolution.defer || resolution.optionId === null) {
       active.remainingTime -= 1;
@@ -1088,6 +1155,8 @@ function resolveEventsForQuarter(
         selectedOptionId: null,
         appliedEffects: [],
         notes: resolution.notes,
+        resolutionMode,
+        advisorPreview,
       });
 
       if (active.remainingTime <= 0) {
@@ -1101,6 +1170,8 @@ function resolveEventsForQuarter(
           selectedOptionId: null,
           appliedEffects: failureEffects,
           notes: "Провал из-за истечения времени",
+          resolutionMode,
+          advisorPreview,
         });
         adjustAdvisorTrust(trust, -severityWeight(active.event));
         adjustEstateTrust(trust, active.event.origin?.estateName, -0.03);
@@ -1119,6 +1190,8 @@ function resolveEventsForQuarter(
         selectedOptionId: option?.id ?? null,
         appliedEffects: [],
         notes: !option ? "Опция не найдена" : "Недостаточно ресурсов для выбранной опции",
+        resolutionMode,
+        advisorPreview,
       });
 
       if (active.remainingTime <= 0) {
@@ -1132,6 +1205,8 @@ function resolveEventsForQuarter(
           selectedOptionId: option?.id ?? null,
           appliedEffects: failureEffects,
           notes: "Провал из-за истечения времени",
+          resolutionMode,
+          advisorPreview,
         });
         adjustAdvisorTrust(trust, -severityWeight(active.event));
         adjustEstateTrust(trust, active.event.origin?.estateName, -0.035);
@@ -1188,6 +1263,8 @@ function resolveEventsForQuarter(
       selectedOptionId: option.id,
       appliedEffects,
       notes: resolution.notes,
+      resolutionMode,
+      advisorPreview,
     });
 
     adjustAdvisorTrust(trust, severityWeight(active.event));
@@ -1472,6 +1549,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     departments: Object.fromEntries(DEPARTMENTS.map((department) => [department, 0])) as Record<Department, number>,
     total: 0,
   };
+  const interventionLog: EventInterventionLogEntry[] = [];
 
   let previousTotalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
   let previousStability: number | null = null;
@@ -1619,7 +1697,9 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       modifiers,
       timedEffects,
       trust,
-      responsePosture
+      responsePosture,
+      config.eventInterventionHandler,
+      interventionLog
     );
 
     const averageLoyaltyRaw =
@@ -1789,5 +1869,6 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       council: cloneCouncilState(councilState),
       plan: cloneStrategicPlan(planState),
     },
+    interventionLog: interventionLog.map((entry) => ({ ...entry })),
   };
 }
