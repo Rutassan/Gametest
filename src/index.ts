@@ -134,6 +134,9 @@ for (const report of result.reports) {
       if (event.factions.length > 0) {
         console.log(`   Фракции: ${event.factions.join(", ")}`);
       }
+      if (event.triggers.length > 0) {
+        console.log(`   Триггеры: ${event.triggers.join(", ")}`);
+      }
       const metricConditions = event.conditions.metrics ?? {};
       const metricEntries = Object.entries(metricConditions);
       if (metricEntries.length > 0) {

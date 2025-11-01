@@ -91,3 +91,24 @@
 |  |  |  |  |  |  |  |  |  |
 |  |  |  |  |  |  |  |  |  |
 
+## 6. Примеры заполнения поля `triggers`
+
+| ID шаблона | Пример значения `triggers` |
+| --- | --- |
+| `region.infrastructure.milestone` | `[
+  "metric:regions.<название региона>.infrastructure",
+  "flag:infrastructure_milestone"
+]` |
+| `region.loyalty.decline` | `[
+  "metric:regions.<название региона>.loyalty",
+  "flag:loyalty_warning"
+]` |
+| `estate.dissatisfaction` | `[
+  "metric:estates.<название сословия>.satisfaction",
+  "flag:estate_pressure"
+]` |
+| `treasury.depletion` | `[
+  "metric:treasury",
+  "flag:budget_alert"
+]` |
+
