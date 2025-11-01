@@ -299,6 +299,34 @@ export interface AdvisorOutcomePreview {
   notes?: string;
 }
 
+export type AdvisorConsultationQueryType = "kpi" | "event" | "department";
+
+export type AdvisorConsultationStance = "support" | "caution" | "escalate";
+
+export interface AdvisorConsultationResponse {
+  advisorId: string;
+  advisorName: string;
+  stance: AdvisorConsultationStance;
+  summary: string;
+  rationale: string[];
+  recommendedAction?: string;
+  kpiFocus?: keyof KPIReport;
+}
+
+export interface AdvisorConsultationThread {
+  id: string;
+  type: AdvisorConsultationQueryType;
+  topic: string;
+  prompt: string;
+  summary: string;
+  responses: AdvisorConsultationResponse[];
+  recommendations: string[];
+  handoffTarget?: string;
+  relatedKpi?: keyof KPIReport;
+  relatedEventId?: string;
+  relatedDepartment?: Department;
+}
+
 export interface EventInterventionPanel {
   event: SimulationEvent;
   quarter: number;
@@ -449,6 +477,7 @@ export interface QuarterlyReport {
   councilReports: CouncilReport[];
   mandateProgress: MandateProgressReport[];
   agendaHighlights: AgendaHighlight[];
+  advisorConsultations: AdvisorConsultationThread[];
   controlMode: CampaignControlMode;
 }
 

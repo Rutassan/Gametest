@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  AdvisorConsultationStance,
+  AdvisorConsultationThread,
   CampaignControlMode,
   ControlModeLogEntry,
   DashboardPayload,
@@ -7,6 +9,7 @@ import type {
   EventOutcomeStatus,
   EventSeverity,
   KPIEntry,
+  KPIReport,
   QuarterlyReport,
   SimulationData,
   ThreatLevel,
@@ -60,6 +63,12 @@ const controlModeLabels: Record<CampaignControlMode, { label: string; descriptio
     badgeClass: "control-pill hybrid",
     toneClass: "hybrid",
   },
+};
+
+const consultationStanceMeta: Record<AdvisorConsultationStance, { label: string; className: string }> = {
+  support: { label: "Поддержка", className: "stance-pill support" },
+  caution: { label: "Предупреждение", className: "stance-pill caution" },
+  escalate: { label: "Эскалация", className: "stance-pill escalate" },
 };
 
 function formatDate(iso: string): string {
@@ -171,6 +180,7 @@ export default function App() {
   const { data: simulation, loading, error, reload } = useSimulationData();
   const [selectedQuarter, setSelectedQuarter] = useState<number | null>(null);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
+  const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
 
   useEffect(() => {
     if (simulation) {
@@ -185,6 +195,56 @@ export default function App() {
     }
     return simulation.reports.find((report) => report.quarter === selectedQuarter) ?? null;
   }, [simulation, selectedQuarter]);
+
+  useEffect(() => {
+    const consultations = reportForQuarter?.advisorConsultations ?? [];
+    if (consultations.length === 0) {
+      setSelectedConsultationId(null);
+      return;
+    }
+    setSelectedConsultationId((previous) => {
+      if (previous && consultations.some((entry) => entry.id === previous)) {
+        return previous;
+      }
+      return consultations[0]?.id ?? null;
+    });
+  }, [reportForQuarter]);
+
+  const consultationsForQuarter = reportForQuarter?.advisorConsultations ?? [];
+
+  const selectedConsultation = useMemo<AdvisorConsultationThread | null>(() => {
+    if (consultationsForQuarter.length === 0) {
+      return null;
+    }
+    if (!selectedConsultationId) {
+      return consultationsForQuarter[0] ?? null;
+    }
+    return (
+      consultationsForQuarter.find((entry) => entry.id === selectedConsultationId) ??
+      consultationsForQuarter[0] ??
+      null
+    );
+  }, [consultationsForQuarter, selectedConsultationId]);
+
+  const consultationByKpi = useMemo<Partial<Record<keyof KPIReport, AdvisorConsultationThread>>>(() => {
+    const map: Partial<Record<keyof KPIReport, AdvisorConsultationThread>> = {};
+    for (const thread of consultationsForQuarter) {
+      if (thread.relatedKpi) {
+        map[thread.relatedKpi] = thread;
+      }
+    }
+    return map;
+  }, [consultationsForQuarter]);
+
+  const consultationsByEvent = useMemo(() => {
+    const map = new Map<string, AdvisorConsultationThread>();
+    for (const thread of consultationsForQuarter) {
+      if (thread.relatedEventId) {
+        map.set(thread.relatedEventId, thread);
+      }
+    }
+    return map;
+  }, [consultationsForQuarter]);
 
   const filteredEvents = useMemo<EventOutcome[]>(() => {
     if (!reportForQuarter) {
@@ -237,7 +297,7 @@ export default function App() {
   const controlState = simulation.controlState;
   const controlInfo = controlModeLabels[controlState.currentMode];
 
-  const kpiEntries: Array<{ key: keyof KPIEntry; label: string; data: KPIEntry }> =
+  const kpiEntries: Array<{ key: keyof KPIReport; label: string; data: KPIEntry }> =
     reportForQuarter
       ? [
           { key: "stability", label: "Стабильность", data: reportForQuarter.kpis.stability },
@@ -344,6 +404,7 @@ export default function App() {
             <div className="kpi-grid">
               {kpiEntries.map((item) => {
                 const trend = describeTrend(item.data);
+                const kpiConsultation = consultationByKpi[item.key];
                 return (
                   <article key={item.key} className="kpi-card">
                     <h4>{item.label}</h4>
@@ -354,6 +415,9 @@ export default function App() {
                         {threatText[item.data.threatLevel]}
                       </span>
                     </div>
+                    {kpiConsultation ? (
+                      <div className="consultation-note">Совет: {kpiConsultation.summary}</div>
+                    ) : null}
                   </article>
                 );
               })}
@@ -386,6 +450,85 @@ export default function App() {
           </>
         ) : (
           <div className="empty-state">Нет данных по выбранному кварталу.</div>
+        )}
+      </section>
+
+      <section className="section consultation-section">
+        <div className="section-header">
+          <h2 className="section-title">Консультации советников</h2>
+        </div>
+
+        {consultationsForQuarter.length === 0 || !selectedConsultation ? (
+          <div className="empty-state">Советники не направили консультации в этом квартале.</div>
+        ) : (
+          <>
+            <form className="consultation-form">
+              <label>
+                Тема
+                <select
+                  value={selectedConsultationId ?? selectedConsultation.id}
+                  onChange={(event) => setSelectedConsultationId(event.target.value)}
+                >
+                  {consultationsForQuarter.map((thread) => (
+                    <option key={thread.id} value={thread.id}>
+                      {thread.topic}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <span className="consultation-prompt">{selectedConsultation.prompt}</span>
+            </form>
+            <p className="consultation-summary-main">{selectedConsultation.summary}</p>
+            <div className="consultation-layout">
+              <aside className="consultation-advisors">
+                <h3>Ответы советников</h3>
+                <ul className="consultation-responses">
+                  {selectedConsultation.responses.map((response) => {
+                    const stanceMeta = consultationStanceMeta[response.stance];
+                    return (
+                      <li key={response.advisorId} className="consultation-response">
+                        <div className="consultation-response-header">
+                          <span className="advisor-name">{response.advisorName}</span>
+                          <span className={stanceMeta.className}>{stanceMeta.label}</span>
+                        </div>
+                        <p className="consultation-response-summary">{response.summary}</p>
+                        {response.rationale.length > 0 ? (
+                          <ul className="consultation-rationale">
+                            {response.rationale.map((line, index) => (
+                              <li key={index}>{line}</li>
+                            ))}
+                          </ul>
+                        ) : null}
+                        {response.recommendedAction ? (
+                          <div className="consultation-action">
+                            Рекомендация: {response.recommendedAction}
+                          </div>
+                        ) : null}
+                      </li>
+                    );
+                  })}
+                </ul>
+              </aside>
+              <div className="consultation-recommendations">
+                <h3>Итоговые рекомендации</h3>
+                {selectedConsultation.recommendations.length > 0 ? (
+                  <ul>
+                    {selectedConsultation.recommendations.map((recommendation, index) => (
+                      <li key={index}>{recommendation}</li>
+                    ))}
+                  </ul>
+                ) : (
+                  <div className="empty-state">Дополнительных указаний нет.</div>
+                )}
+                <button type="button" className="handoff-button">
+                  Передать исполнение
+                </button>
+                {selectedConsultation.handoffTarget ? (
+                  <span className="handoff-meta">{selectedConsultation.handoffTarget}</span>
+                ) : null}
+              </div>
+            </div>
+          </>
         )}
       </section>
 
@@ -448,6 +591,7 @@ export default function App() {
               if (entry.event.origin?.estateName) {
                 contextParts.push(`Сословие: ${entry.event.origin.estateName}`);
               }
+              const eventConsultation = consultationsByEvent.get(entry.event.id);
               return (
                 <article
                   key={`${entry.event.id}-${entry.status}-${index}`}
@@ -470,6 +614,9 @@ export default function App() {
                     <p>Эффекты: {renderEffects(entry.appliedEffects)}</p>
                   ) : null}
                   {entry.notes ? <p>Примечание: {entry.notes}</p> : null}
+                  {eventConsultation ? (
+                    <div className="consultation-note">Совет: {eventConsultation.summary}</div>
+                  ) : null}
                 </article>
               );
             })}
