@@ -62,6 +62,7 @@ import {
   createLoyaltyDeclineEvent,
   createTreasuryDepletionEvent,
 } from "./events";
+import { generateAdvisorConsultations } from "./consultations";
 import {
   priorityBudgetBoost,
   priorityDevelopmentMultiplier,
@@ -1885,6 +1886,19 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     }
 
     const trustSnapshot = cloneTrustLevels(trust);
+    const consultationContext: EventDecisionContext = {
+      quarter,
+      resources: { ...resources },
+      estates: estates.map((estate) => ({ ...estate })),
+      regions: regions.map((region) => ({ ...region })),
+      departments: departments.map((department) => ({ ...department })),
+      trust: trustSnapshot,
+      kpis,
+      posture: responsePosture.default,
+      agenda: cloneStrategicPlan(planState),
+      council: cloneCouncilState(councilState),
+    };
+    const advisorConsultations = generateAdvisorConsultations(consultationContext, quarterEvents);
 
     reports.push({
       quarter,
@@ -1908,6 +1922,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       councilReports,
       mandateProgress: mandateReports,
       agendaHighlights,
+      advisorConsultations,
       controlMode: controlRuntime.currentMode,
     });
 

@@ -2,6 +2,8 @@ export type ThreatLevel = "low" | "moderate" | "critical";
 export type EventSeverity = "minor" | "moderate" | "major";
 export type EventOutcomeStatus = "resolved" | "failed" | "deferred";
 export type CampaignControlMode = "manual" | "advisor" | "hybrid";
+export type AdvisorConsultationQueryType = "kpi" | "event" | "department";
+export type AdvisorConsultationStance = "support" | "caution" | "escalate";
 
 export interface ResourcePool {
   gold: number;
@@ -94,6 +96,30 @@ export interface EventOutcome {
   notes?: string;
 }
 
+export interface AdvisorConsultationResponse {
+  advisorId: string;
+  advisorName: string;
+  stance: AdvisorConsultationStance;
+  summary: string;
+  rationale: string[];
+  recommendedAction?: string;
+  kpiFocus?: keyof KPIReport;
+}
+
+export interface AdvisorConsultationThread {
+  id: string;
+  type: AdvisorConsultationQueryType;
+  topic: string;
+  prompt: string;
+  summary: string;
+  responses: AdvisorConsultationResponse[];
+  recommendations: string[];
+  handoffTarget?: string;
+  relatedKpi?: keyof KPIReport;
+  relatedEventId?: string;
+  relatedDepartment?: string;
+}
+
 export interface ControlModeLogEntry {
   quarter: number;
   mode: CampaignControlMode;
@@ -124,6 +150,7 @@ export interface QuarterlyReport {
   trust: TrustLevels;
   activeThreatLevel: number;
   controlMode: CampaignControlMode;
+  advisorConsultations: AdvisorConsultationThread[];
 }
 
 export interface SimulationTotals {
