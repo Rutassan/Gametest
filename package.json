@@ -7,7 +7,11 @@
     "build": "tsc",
     "simulate": "ts-node src/index.ts",
     "dashboard": "ts-node src/ui.ts",
-    "test": "vitest"
+    "dashboard:prepare": "npm run dashboard && node scripts/sync-dashboard-data.js",
+    "dashboard:dev": "npm run dashboard:prepare && vite --config dashboard-app/vite.config.mts",
+    "dashboard:build:spa": "npm run dashboard:prepare && vite build --config dashboard-app/vite.config.mts",
+    "dashboard:preview": "vite preview --config dashboard-app/vite.config.mts",
+    "test": "vitest run"
   },
   "keywords": [],
   "author": "",
@@ -15,8 +19,16 @@
   "type": "commonjs",
   "devDependencies": {
     "@types/node": "^24.9.2",
+    "@types/react": "^18.3.5",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^5.0.0",
     "ts-node": "^10.9.2",
     "typescript": "^5.9.3",
+    "vite": "^5.3.5",
     "vitest": "^1.6.0"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
   }
 }
