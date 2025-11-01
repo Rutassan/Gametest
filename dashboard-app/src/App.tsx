@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
+import CampaignMap, { MapLayer } from "./CampaignMap";
 import type {
   AdvisorConsultationStance,
   AdvisorConsultationThread,
@@ -125,6 +126,20 @@ const projectFocusLabels: Record<string, string> = {
   administration: "Администрирование",
 };
 
+const mapLayerOptions: Array<{ id: MapLayer; label: string }> = [
+  { id: "risk", label: "Риски" },
+  { id: "infrastructure", label: "Инфраструктура" },
+  { id: "wealth", label: "Богатство" },
+  { id: "projects", label: "Проекты" },
+];
+
+const mapLayerNotes: Record<MapLayer, string> = {
+  risk: "Слой: риск-профиль",
+  infrastructure: "Слой: инфраструктура",
+  wealth: "Слой: богатство",
+  projects: "Слой: проекты",
+};
+
 function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -136,6 +151,29 @@ function formatDate(iso: string): string {
   }).format(date);
 }
 
+function MapLayerButtons({
+  value,
+  onChange,
+}: {
+  value: MapLayer;
+  onChange: (layer: MapLayer) => void;
+}) {
+  return (
+    <div className="map-layer-toggle">
+      {mapLayerOptions.map((option) => (
+        <button
+          key={option.id}
+          type="button"
+          className={option.id === value ? "layer-chip active" : "layer-chip"}
+          onClick={() => onChange(option.id)}
+        >
+          {option.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function LiveCampaignView({
   data,
   error,
@@ -145,6 +183,8 @@ function LiveCampaignView({
   error: string | null;
   onRefresh: () => void;
 }) {
+  const [layer, setLayer] = useState<MapLayer>("risk");
+
   if (error) {
     return (
       <div className="live-view">
@@ -170,6 +210,20 @@ function LiveCampaignView({
   const priorities = Object.entries(
     data.plan.priorities ?? {}
   ) as Array<[string, "neglect" | "steady" | "push"]>;
+  const liveProjects = data.plan.projects ?? [];
+  const regionSnapshots = lastReport?.regions ?? [];
+  const activeRegions = Array.from(
+    new Set(
+      data.activeEvents
+        .map((entry) => entry.event.origin?.regionName)
+        .filter((name): name is string => Boolean(name))
+    )
+  );
+  const eventsNote =
+    data.activeEvents.length > 0
+      ? `Активных событий: ${data.activeEvents.length}`
+      : "Ситуация стабильна";
+  const statusNote = `${mapLayerNotes[layer]} • ${eventsNote}`;
 
   return (
     <div className="live-view">
@@ -199,6 +253,22 @@ function LiveCampaignView({
             ))}
           </div>
         )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Тактическая карта</h2>
+          <MapLayerButtons value={layer} onChange={setLayer} />
+        </div>
+        <CampaignMap
+          regions={regionSnapshots}
+          highlightRegions={activeRegions}
+          resourcesSummary={data.session.resources}
+          controlMode={data.session.controlMode}
+          statusNote={statusNote}
+          layer={layer}
+          projects={liveProjects}
+        />
       </section>
 
       <section className="section">
@@ -417,6 +487,7 @@ export default function App() {
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
   const [handoffLog, setHandoffLog] = useState<Array<{ id: string; message: string; timestamp: string }>>([]);
+  const [summaryMapLayer, setSummaryMapLayer] = useState<MapLayer>("risk");
 
   useEffect(() => {
     if (simulation) {
@@ -695,6 +766,23 @@ export default function App() {
   const councilReports = reportForQuarter?.councilReports ?? [];
   const estates = reportForQuarter?.estates ?? [];
   const regions = reportForQuarter?.regions ?? [];
+  const summaryResources = reportForQuarter?.treasury ?? finalState.resources;
+  const highlightedRegions = useMemo(() => {
+    if (!reportForQuarter) {
+      return [];
+    }
+    const names = new Set<string>();
+    reportForQuarter.events.forEach((entry) => {
+      const regionName = entry.event.origin?.regionName;
+      if (regionName) {
+        names.add(regionName);
+      }
+    });
+    return Array.from(names);
+  }, [reportForQuarter]);
+  const summaryStatusNote = reportForQuarter
+    ? `${mapLayerNotes[summaryMapLayer]} • Q${reportForQuarter.quarter}`
+    : `${mapLayerNotes[summaryMapLayer]} • Итоговый статус сохранения`;
 
   const liveSession = liveData?.session ?? null;
   const liveControlInfo = liveSession ? controlModeLabels[liveSession.controlMode] : null;
@@ -1297,7 +1385,23 @@ export default function App() {
         )}
       </section>
 
-     <section className="section">
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Карта кампании</h2>
+          <MapLayerButtons value={summaryMapLayer} onChange={setSummaryMapLayer} />
+        </div>
+        <CampaignMap
+          regions={regions}
+          highlightRegions={highlightedRegions}
+          resourcesSummary={summaryResources}
+          controlMode={reportForQuarter?.controlMode ?? finalState.controlMode}
+          statusNote={summaryStatusNote}
+          layer={summaryMapLayer}
+          projects={projects}
+        />
+      </section>
+
+      <section className="section">
         <div className="section-header">
           <h2 className="section-title">Регионы</h2>
         </div>

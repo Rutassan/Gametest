@@ -1,5 +1,5 @@
 import { createInterface, Interface } from "readline/promises";
-import { existsSync, statSync } from "fs";
+import { existsSync, statSync, mkdirSync, writeFileSync } from "fs";
 import { stdin as input, stdout as output } from "process";
 import { join, resolve } from "path";
 import { buildBaselineConfig } from "./config";

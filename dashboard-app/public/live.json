@@ -1,0 +1,2505 @@
+{
+  "session": {
+    "currentQuarter": 1,
+    "totalQuarters": 4,
+    "controlMode": "hybrid",
+    "resources": {
+      "gold": 53.737550000000056,
+      "influence": 110.80799999999999,
+      "labor": 410.92049999999995
+    },
+    "trust": {
+      "advisor": 0.58,
+      "estates": {
+        "дворянство": 0.6259649386208521,
+        "духовенство": 0.8019074861158723,
+        "буржуазия": 0.9,
+        "крестьянство": 0.7219074861158723,
+        "гильдии": 0.6859573979805895
+      }
+    },
+    "modifiers": {
+      "stability": -5.1,
+      "threat": 0.45,
+      "budget": 0,
+      "securityPressure": 1.29
+    },
+    "averages": {
+      "stability": 57.59,
+      "economicGrowth": 95.67,
+      "securityIndex": 8.41,
+      "activeCrises": 0
+    }
+  },
+  "activeEvents": [
+    {
+      "event": {
+        "id": "kpi.stability.crisis",
+        "category": "Социальные потрясения",
+        "severity": "moderate",
+        "title": "Население Кузнечный край требует гарантий и защиты",
+        "description": "Слухи о беспорядках в Кузнечный край распространяются по всей стране. Люди ожидают вмешательства власти.",
+        "factions": [
+          "Корона / центральная власть",
+          "Кузнечный край"
+        ],
+        "triggers": [
+          "metric:stability",
+          "metric:regions.Кузнечный край.loyalty"
+        ],
+        "conditions": {
+          "metrics": {
+            "stability": "<= 55",
+            "regions.Кузнечный край.loyalty": "<= 45"
+          }
+        },
+        "options": [
+          {
+            "id": "deploy_mediators",
+            "description": "Отправить внутренних инспекторов и выделить средства на местные проекты",
+            "cost": {
+              "influence": 4,
+              "gold": 35
+            },
+            "effects": [
+              {
+                "type": "loyalty",
+                "target": "Кузнечный край",
+                "value": 4
+              },
+              {
+                "type": "stability",
+                "target": "империя",
+                "value": 1,
+                "duration": 2
+              }
+            ]
+          },
+          {
+            "id": "promise_reforms",
+            "description": "Пообещать реформы и снизить налоговое давление",
+            "cost": {
+              "influence": 3
+            },
+            "effects": [
+              {
+                "type": "loyalty",
+                "target": "Кузнечный край",
+                "value": 2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -25
+              }
+            ],
+            "followUps": [
+              "estate.dissatisfaction"
+            ]
+          }
+        ],
+        "failure": {
+          "timeout": 1,
+          "description": "Протесты перерастают в очаги неповиновения и подрывают легитимность власти.",
+          "effects": [
+            {
+              "type": "loyalty",
+              "target": "Кузнечный край",
+              "value": -5
+            },
+            {
+              "type": "stability",
+              "target": "империя",
+              "value": -2
+            }
+          ]
+        },
+        "escalation": [
+          {
+            "chance": 0.2,
+            "followUp": "region.loyalty.decline",
+            "description": "Неспособность урегулировать кризис в Кузнечный край может привести к открытому бунту."
+          }
+        ],
+        "origin": {
+          "regionName": "Кузнечный край",
+          "source": "kpi.stability.crisis"
+        }
+      },
+      "remainingTime": 1,
+      "originQuarter": 1,
+      "escalated": false
+    },
+    {
+      "event": {
+        "id": "kpi.security.alert",
+        "category": "Военные угрозы",
+        "severity": "moderate",
+        "title": "Пограничные дозоры Кузнечный край сообщают о росте угроз",
+        "description": "Недофинансирование гарнизонов Кузнечный край оставляет границы без защиты.",
+        "factions": [
+          "Военное сословие / гарнизоны",
+          "Кузнечный край"
+        ],
+        "triggers": [
+          "metric:securityIndex",
+          "metric:regions.Кузнечный край.loyalty"
+        ],
+        "conditions": {
+          "metrics": {
+            "securityIndex": "<= 35"
+          }
+        },
+        "options": [
+          {
+            "id": "mobilize_reserves",
+            "description": "Увеличить военные ассигнования и усилить гарнизоны",
+            "cost": {
+              "gold": 60,
+              "labor": 20
+            },
+            "effects": [
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -40
+              },
+              {
+                "type": "loyalty",
+                "target": "Кузнечный край",
+                "value": 3
+              },
+              {
+                "type": "threat",
+                "target": "border",
+                "value": -1
+              }
+            ]
+          },
+          {
+            "id": "negotiate_truces",
+            "description": "Использовать дипломатию, чтобы выиграть время",
+            "cost": {
+              "influence": 6
+            },
+            "effects": [
+              {
+                "type": "threat",
+                "target": "границы",
+                "value": -1
+              },
+              {
+                "type": "reputation",
+                "target": "Региональные элиты",
+                "value": 1
+              }
+            ]
+          }
+        ],
+        "failure": {
+          "timeout": 1,
+          "description": "Пограничные инциденты учащаются, а гарнизоны теряют дисциплину.",
+          "effects": [
+            {
+              "type": "threat",
+              "target": "border",
+              "value": 2
+            },
+            {
+              "type": "stability",
+              "target": "империя",
+              "value": -2
+            },
+            {
+              "type": "loyalty",
+              "target": "Кузнечный край",
+              "value": -4
+            }
+          ]
+        },
+        "escalation": [
+          {
+            "chance": 0.25,
+            "followUp": "treasury.depletion",
+            "description": "Эскалация на границе Кузнечный край грозит перерасти в полномасштабный конфликт."
+          }
+        ],
+        "origin": {
+          "regionName": "Кузнечный край",
+          "source": "kpi.security.alert"
+        }
+      },
+      "remainingTime": 1,
+      "originQuarter": 1,
+      "escalated": false
+    }
+  ],
+  "plan": {
+    "priorities": {
+      "economy": "push",
+      "diplomacy": "steady",
+      "internal": "push",
+      "military": "steady",
+      "science": "steady"
+    },
+    "mandates": [
+      {
+        "mandateId": "mandate_capital_stability",
+        "label": "Стабилизировать Столичную марку",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Лояльность выросла на +0.0 пунктов"
+      },
+      {
+        "mandateId": "mandate_border_fort",
+        "label": "Усилить северные заставы",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Индекс безопасности изменился на +0.0"
+      },
+      {
+        "mandateId": "mandate_trade_corridor",
+        "label": "Развить торговый коридор",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Финансовые показатели сместились на +0.0"
+      }
+    ],
+    "projects": [
+      {
+        "id": "project_infrastructure_spine",
+        "name": "Имперский инфраструктурный хребет",
+        "focus": "economy",
+        "description": "Связать столичные маршруты с кузнечными мастерскими и зерновым поясом",
+        "milestones": [
+          0.25,
+          0.5,
+          0.75,
+          1
+        ],
+        "progress": 0.08,
+        "ownerAdvisorId": "council_internal"
+      },
+      {
+        "id": "project_border_legion",
+        "name": "Легион пограничной стражи",
+        "focus": "military",
+        "description": "Подготовить мобильные силы для реагирования на кризисы и набеги",
+        "milestones": [
+          0.33,
+          0.66,
+          1
+        ],
+        "progress": 0.021,
+        "ownerAdvisorId": "council_military"
+      },
+      {
+        "id": "project_arcane_college",
+        "name": "Аркана-коллегия",
+        "focus": "science",
+        "description": "Расширить научные лаборатории и магические мастерские",
+        "milestones": [
+          0.5,
+          1
+        ],
+        "progress": 0.045,
+        "ownerAdvisorId": "council_science"
+      }
+    ]
+  },
+  "council": [
+    {
+      "id": "council_economy",
+      "name": "Маркиз Лукреций Вальдор",
+      "portfolio": "economy",
+      "stress": 0.3,
+      "motivation": 0.606,
+      "assignedMandates": [
+        "mandate_trade_corridor"
+      ],
+      "lastQuarterSummary": "Контролирует поручения (прогресс 0%)"
+    },
+    {
+      "id": "council_military",
+      "name": "Генерал Ирена Крейс",
+      "portfolio": "military",
+      "stress": 0.3,
+      "motivation": 0.582,
+      "assignedMandates": [
+        "mandate_border_fort"
+      ],
+      "lastQuarterSummary": "Контролирует поручения (прогресс 0%)"
+    },
+    {
+      "id": "council_internal",
+      "name": "Канцлер Элларион",
+      "portfolio": "internal",
+      "stress": 0.3,
+      "motivation": 0.634,
+      "assignedMandates": [
+        "mandate_capital_stability"
+      ],
+      "lastQuarterSummary": "Контролирует поручения (прогресс 0%)"
+    },
+    {
+      "id": "council_diplomacy",
+      "name": "Посол Селеста Мирран",
+      "portfolio": "diplomacy",
+      "stress": 0.3,
+      "motivation": 0.658,
+      "assignedMandates": [],
+      "lastQuarterSummary": "Сохраняет стабильное управление"
+    },
+    {
+      "id": "council_science",
+      "name": "Магистр Талия Венр",
+      "portfolio": "science",
+      "stress": 0.3,
+      "motivation": 0.598,
+      "assignedMandates": [],
+      "lastQuarterSummary": "Сохраняет стабильное управление"
+    },
+    {
+      "id": "council_intelligence",
+      "name": "Теневой куратор Йорен",
+      "portfolio": "intelligence",
+      "stress": 0.3,
+      "motivation": 0.558,
+      "assignedMandates": [],
+      "lastQuarterSummary": "Сохраняет стабильное управление"
+    }
+  ],
+  "lastReport": {
+    "quarter": 1,
+    "incomes": {
+      "gold": 348.74,
+      "influence": 38.81,
+      "labor": 260.92
+    },
+    "expenses": {
+      "departments": {
+        "economy": 180.19,
+        "diplomacy": 45.2,
+        "internal": 83.97,
+        "military": 35.32,
+        "science": 75.32
+      },
+      "total": 420
+    },
+    "treasury": {
+      "gold": 53.74,
+      "influence": 110.81,
+      "labor": 410.92
+    },
+    "estates": [
+      {
+        "name": "дворянство",
+        "satisfaction": 62.6,
+        "influence": 29.8
+      },
+      {
+        "name": "духовенство",
+        "satisfaction": 80.2,
+        "influence": 26.7
+      },
+      {
+        "name": "буржуазия",
+        "satisfaction": 90,
+        "influence": 28.5
+      },
+      {
+        "name": "крестьянство",
+        "satisfaction": 72.2,
+        "influence": 24.7
+      },
+      {
+        "name": "гильдии",
+        "satisfaction": 68.6,
+        "influence": 16.2
+      }
+    ],
+    "regions": [
+      {
+        "name": "Столичная марка",
+        "wealth": 241.6,
+        "loyalty": 71.9,
+        "infrastructure": 75.2,
+        "riskScore": 0.061,
+        "riskLevel": "low",
+        "riskFactors": [
+          "Ситуация стабильна"
+        ]
+      },
+      {
+        "name": "Зерновой пояс",
+        "wealth": 183.4,
+        "loyalty": 62.9,
+        "infrastructure": 62.2,
+        "riskScore": 0.132,
+        "riskLevel": "low",
+        "riskFactors": [
+          "Ситуация стабильна"
+        ]
+      },
+      {
+        "name": "Кузнечный край",
+        "wealth": 220.7,
+        "loyalty": 55.9,
+        "infrastructure": 71,
+        "riskScore": 0.202,
+        "riskLevel": "low",
+        "riskFactors": [
+          "Низкая лояльность"
+        ]
+      }
+    ],
+    "departments": [
+      {
+        "name": "economy",
+        "efficiency": 1.137,
+        "budget": 180.19,
+        "cumulativeInvestment": 180.19,
+        "spendingShare": 0.429,
+        "agendaPriority": "push"
+      },
+      {
+        "name": "diplomacy",
+        "efficiency": 0.932,
+        "budget": 45.2,
+        "cumulativeInvestment": 45.2,
+        "spendingShare": 0.108,
+        "agendaPriority": "steady"
+      },
+      {
+        "name": "internal",
+        "efficiency": 1.119,
+        "budget": 83.97,
+        "cumulativeInvestment": 83.97,
+        "spendingShare": 0.2,
+        "agendaPriority": "push"
+      },
+      {
+        "name": "military",
+        "efficiency": 1.159,
+        "budget": 35.32,
+        "cumulativeInvestment": 35.32,
+        "spendingShare": 0.084,
+        "agendaPriority": "steady"
+      },
+      {
+        "name": "science",
+        "efficiency": 0.85,
+        "budget": 75.32,
+        "cumulativeInvestment": 75.32,
+        "spendingShare": 0.179,
+        "agendaPriority": "steady"
+      }
+    ],
+    "events": [
+      {
+        "event": {
+          "id": "region.infrastructure.milestone",
+          "category": "Технологические / магические открытия",
+          "severity": "minor",
+          "title": "Инфраструктура Столичная марка достигает нового рубежа",
+          "description": "Обновления коммуникаций в регионе Столичная марка выводят инфраструктуру на уровень 76.2.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "metric:regions.Столичная марка.infrastructure",
+            "flag:infrastructure_milestone"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Столичная марка.infrastructure": ">= 76"
+            }
+          },
+          "options": [
+            {
+              "id": "infrastructure_bonus",
+              "description": "Продолжить финансирование проектов и закрепить успех",
+              "cost": {
+                "gold": 45,
+                "influence": 5
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Столичная марка",
+                  "value": 2,
+                  "duration": 2
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.audit"
+              ],
+              "cooldown": 2
+            },
+            {
+              "id": "diversify_budget",
+              "description": "Перенаправить часть средств в другие провинции",
+              "cost": {
+                "influence": 4
+              },
+              "effects": [
+                {
+                  "type": "wealth",
+                  "target": "Столичная марка",
+                  "value": -5
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.stagnation"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 2,
+            "description": "Проект растянется и часть подрядчиков начнёт экономить на материалах.",
+            "effects": [
+              {
+                "type": "infrastructure",
+                "target": "Столичная марка",
+                "value": -2
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.2,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Если не обеспечить контроль, затраты в регионе Столичная марка выйдут из-под контроля."
+            }
+          ],
+          "origin": {
+            "regionName": "Столичная марка",
+            "milestone": 76.24790278986673,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "diversify_budget",
+        "appliedEffects": [
+          {
+            "type": "wealth",
+            "target": "Столичная марка",
+            "value": -5
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "diversify_budget"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.milestone",
+          "category": "Технологические / магические открытия",
+          "severity": "minor",
+          "title": "Инфраструктура Зерновой пояс достигает нового рубежа",
+          "description": "Обновления коммуникаций в регионе Зерновой пояс выводят инфраструктуру на уровень 61.2.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "metric:regions.Зерновой пояс.infrastructure",
+            "flag:infrastructure_milestone"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Зерновой пояс.infrastructure": ">= 61"
+            }
+          },
+          "options": [
+            {
+              "id": "infrastructure_bonus",
+              "description": "Продолжить финансирование проектов и закрепить успех",
+              "cost": {
+                "gold": 45,
+                "influence": 5
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": 2,
+                  "duration": 2
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.audit"
+              ],
+              "cooldown": 2
+            },
+            {
+              "id": "diversify_budget",
+              "description": "Перенаправить часть средств в другие провинции",
+              "cost": {
+                "influence": 4
+              },
+              "effects": [
+                {
+                  "type": "wealth",
+                  "target": "Зерновой пояс",
+                  "value": -5
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.stagnation"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 2,
+            "description": "Проект растянется и часть подрядчиков начнёт экономить на материалах.",
+            "effects": [
+              {
+                "type": "infrastructure",
+                "target": "Зерновой пояс",
+                "value": -2
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.2,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Если не обеспечить контроль, затраты в регионе Зерновой пояс выйдут из-под контроля."
+            }
+          ],
+          "origin": {
+            "regionName": "Зерновой пояс",
+            "milestone": 61.24790278986673,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "infrastructure_bonus",
+        "appliedEffects": [
+          {
+            "type": "infrastructure",
+            "target": "Зерновой пояс",
+            "value": 2,
+            "duration": 2
+          }
+        ],
+        "resolutionMode": "player",
+        "advisorPreview": {
+          "optionId": "diversify_budget"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.milestone",
+          "category": "Технологические / магические открытия",
+          "severity": "minor",
+          "title": "Инфраструктура Кузнечный край достигает нового рубежа",
+          "description": "Обновления коммуникаций в регионе Кузнечный край выводят инфраструктуру на уровень 72.0.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "metric:regions.Кузнечный край.infrastructure",
+            "flag:infrastructure_milestone"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Кузнечный край.infrastructure": ">= 72"
+            }
+          },
+          "options": [
+            {
+              "id": "infrastructure_bonus",
+              "description": "Продолжить финансирование проектов и закрепить успех",
+              "cost": {
+                "gold": 45,
+                "influence": 5
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Кузнечный край",
+                  "value": 2,
+                  "duration": 2
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.audit"
+              ],
+              "cooldown": 2
+            },
+            {
+              "id": "diversify_budget",
+              "description": "Перенаправить часть средств в другие провинции",
+              "cost": {
+                "influence": 4
+              },
+              "effects": [
+                {
+                  "type": "wealth",
+                  "target": "Кузнечный край",
+                  "value": -5
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.stagnation"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 2,
+            "description": "Проект растянется и часть подрядчиков начнёт экономить на материалах.",
+            "effects": [
+              {
+                "type": "infrastructure",
+                "target": "Кузнечный край",
+                "value": -2
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.2,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Если не обеспечить контроль, затраты в регионе Кузнечный край выйдут из-под контроля."
+            }
+          ],
+          "origin": {
+            "regionName": "Кузнечный край",
+            "milestone": 72.01936837115369,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "diversify_budget",
+        "appliedEffects": [
+          {
+            "type": "wealth",
+            "target": "Кузнечный край",
+            "value": -5
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "diversify_budget"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.stagnation",
+          "category": "Экономический кризис",
+          "severity": "moderate",
+          "title": "Темпы строительства в регионе Столичная марка замирают",
+          "description": "Подрядчики сообщают о нехватке средств и рабочих рук, из-за чего объекты Столичная марка простаивают.",
+          "factions": [
+            "Гильдии купцов",
+            "Столичная марка"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.milestone",
+            "metric:regions.Столичная марка.infrastructure"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Столичная марка.infrastructure": "<= 55"
+            }
+          },
+          "options": [
+            {
+              "id": "restart_investments",
+              "description": "Срочно выделить дополнительные субсидии",
+              "cost": {
+                "gold": 60,
+                "labor": 20
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Столичная марка",
+                  "value": 2,
+                  "duration": 2
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Столичная марка",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "scale_back",
+              "description": "Законсервировать часть проектов до лучших времён",
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 20
+                },
+                {
+                  "type": "infrastructure",
+                  "target": "Столичная марка",
+                  "value": -1
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.overextension"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты простаивают, а коррупция поедает бюджет.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Столичная марка",
+                "value": -1
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -35
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.3,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Бюджетные дыры в регионе Столичная марка грозят перерасти в полномасштабный кризис."
+            }
+          ],
+          "origin": {
+            "regionName": "Столичная марка",
+            "milestone": 76.24790278986673,
+            "loyalty": 71.92481326350125,
+            "treasury": 248.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "scale_back",
+        "appliedEffects": [
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": 20
+          },
+          {
+            "type": "infrastructure",
+            "target": "Столичная марка",
+            "value": -1
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "scale_back"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.audit",
+          "category": "Технологические / магические открытия",
+          "severity": "minor",
+          "title": "Аудит инфраструктурных проектов в регионе Зерновой пояс",
+          "description": "Контрольная комиссия проверяет, насколько эффективно используются инвестиции в Зерновой пояс.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.milestone",
+            "metric:regions.Зерновой пояс.infrastructure"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Зерновой пояс.infrastructure": ">= 60"
+            }
+          },
+          "options": [
+            {
+              "id": "reinforce_supervision",
+              "description": "Расширить надзор и привлечь независимых аудиторов",
+              "cost": {
+                "influence": 4,
+                "gold": 20
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": 1,
+                  "duration": 2
+                },
+                {
+                  "type": "stability",
+                  "target": "Зерновой пояс",
+                  "value": 1
+                }
+              ]
+            },
+            {
+              "id": "accept_results",
+              "description": "Принять отчёт и перераспределить высвободившиеся средства",
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 30
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Зерновой пояс",
+                  "value": -1
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.stagnation"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 2,
+            "description": "Нарушения остаются без внимания, и подрядчики завышают счета.",
+            "effects": [
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -40
+              },
+              {
+                "type": "infrastructure",
+                "target": "Зерновой пояс",
+                "value": -2
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Зерновой пояс",
+            "milestone": 61.24790278986673,
+            "loyalty": 63.92481326350125,
+            "treasury": 203.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "accept_results",
+        "appliedEffects": [
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": 30
+          },
+          {
+            "type": "loyalty",
+            "target": "Зерновой пояс",
+            "value": -1
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "accept_results"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.stagnation",
+          "category": "Экономический кризис",
+          "severity": "moderate",
+          "title": "Темпы строительства в регионе Кузнечный край замирают",
+          "description": "Подрядчики сообщают о нехватке средств и рабочих рук, из-за чего объекты Кузнечный край простаивают.",
+          "factions": [
+            "Гильдии купцов",
+            "Кузнечный край"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.milestone",
+            "metric:regions.Кузнечный край.infrastructure"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Кузнечный край.infrastructure": "<= 55"
+            }
+          },
+          "options": [
+            {
+              "id": "restart_investments",
+              "description": "Срочно выделить дополнительные субсидии",
+              "cost": {
+                "gold": 60,
+                "labor": 20
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Кузнечный край",
+                  "value": 2,
+                  "duration": 2
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "scale_back",
+              "description": "Законсервировать часть проектов до лучших времён",
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 20
+                },
+                {
+                  "type": "infrastructure",
+                  "target": "Кузнечный край",
+                  "value": -1
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.overextension"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты простаивают, а коррупция поедает бюджет.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Кузнечный край",
+                "value": -1
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -35
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.3,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Бюджетные дыры в регионе Кузнечный край грозят перерасти в полномасштабный кризис."
+            }
+          ],
+          "origin": {
+            "regionName": "Кузнечный край",
+            "milestone": 72.01936837115369,
+            "loyalty": 55.92481326350125,
+            "treasury": 203.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "scale_back",
+        "appliedEffects": [
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": 20
+          },
+          {
+            "type": "infrastructure",
+            "target": "Кузнечный край",
+            "value": -1
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "scale_back"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Столичная марка достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Столичная марка вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Столичная марка.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Столичная марка.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Столичная марка",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Столичная марка",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Столичная марка",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Столичная марка",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Столичная марка",
+            "milestone": 76.24790278986673,
+            "loyalty": 71.92481326350125,
+            "treasury": 223.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "deferred",
+        "selectedOptionId": null,
+        "appliedEffects": [],
+        "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Столичная марка достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Столичная марка вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Столичная марка.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Столичная марка.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Столичная марка",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Столичная марка",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Столичная марка",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Столичная марка",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Столичная марка",
+            "milestone": 76.24790278986673,
+            "loyalty": 71.92481326350125,
+            "treasury": 223.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "failed",
+        "selectedOptionId": null,
+        "appliedEffects": [
+          {
+            "type": "stability",
+            "target": "Столичная марка",
+            "value": -2
+          },
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": -80
+          }
+        ],
+        "notes": "Провал из-за истечения времени",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.stagnation",
+          "category": "Экономический кризис",
+          "severity": "moderate",
+          "title": "Темпы строительства в регионе Зерновой пояс замирают",
+          "description": "Подрядчики сообщают о нехватке средств и рабочих рук, из-за чего объекты Зерновой пояс простаивают.",
+          "factions": [
+            "Гильдии купцов",
+            "Зерновой пояс"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.milestone",
+            "metric:regions.Зерновой пояс.infrastructure"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Зерновой пояс.infrastructure": "<= 55"
+            }
+          },
+          "options": [
+            {
+              "id": "restart_investments",
+              "description": "Срочно выделить дополнительные субсидии",
+              "cost": {
+                "gold": 60,
+                "labor": 20
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": 2,
+                  "duration": 2
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Зерновой пояс",
+                  "value": 2
+                }
+              ]
+            },
+            {
+              "id": "scale_back",
+              "description": "Законсервировать часть проектов до лучших времён",
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 20
+                },
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": -1
+                }
+              ],
+              "followUps": [
+                "region.infrastructure.overextension"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты простаивают, а коррупция поедает бюджет.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Зерновой пояс",
+                "value": -1
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -35
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.3,
+              "followUp": "region.infrastructure.overextension",
+              "description": "Бюджетные дыры в регионе Зерновой пояс грозят перерасти в полномасштабный кризис."
+            }
+          ],
+          "origin": {
+            "regionName": "Зерновой пояс",
+            "milestone": 61.24790278986673,
+            "loyalty": 62.92481326350125,
+            "treasury": 253.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "resolved",
+        "selectedOptionId": "scale_back",
+        "appliedEffects": [
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": 20
+          },
+          {
+            "type": "infrastructure",
+            "target": "Зерновой пояс",
+            "value": -1
+          }
+        ],
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "scale_back"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Кузнечный край достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Кузнечный край вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Кузнечный край.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Кузнечный край.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Кузнечный край",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Кузнечный край",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Кузнечный край",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Кузнечный край",
+            "milestone": 72.01936837115369,
+            "loyalty": 55.92481326350125,
+            "treasury": 273.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "deferred",
+        "selectedOptionId": null,
+        "appliedEffects": [],
+        "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Кузнечный край достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Кузнечный край вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Кузнечный край.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Кузнечный край.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Кузнечный край",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Кузнечный край",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Кузнечный край",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Кузнечный край",
+            "milestone": 72.01936837115369,
+            "loyalty": 55.92481326350125,
+            "treasury": 273.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "failed",
+        "selectedOptionId": null,
+        "appliedEffects": [
+          {
+            "type": "stability",
+            "target": "Кузнечный край",
+            "value": -2
+          },
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": -80
+          }
+        ],
+        "notes": "Провал из-за истечения времени",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Зерновой пояс достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Зерновой пояс вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Зерновой пояс.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Зерновой пояс.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Зерновой пояс",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Зерновой пояс",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Зерновой пояс",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Зерновой пояс",
+            "milestone": 61.24790278986673,
+            "loyalty": 62.92481326350125,
+            "treasury": 213.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "deferred",
+        "selectedOptionId": null,
+        "appliedEffects": [],
+        "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "region.infrastructure.overextension",
+          "category": "Экономический кризис",
+          "severity": "major",
+          "title": "Перерасход бюджета в Зерновой пояс достигает критической точки",
+          "description": "Накопленные долги и неоконченные проекты в Зерновой пояс вызывают тревогу у инвесторов и населения.",
+          "factions": [
+            "Корона / центральная власть",
+            "Гильдии купцов"
+          ],
+          "triggers": [
+            "followup:region.infrastructure.stagnation",
+            "metric:regions.Зерновой пояс.infrastructure",
+            "flag:infrastructure_overextension"
+          ],
+          "conditions": {
+            "metrics": {
+              "regions.Зерновой пояс.infrastructure": "<= 50"
+            },
+            "flags": [
+              "infrastructure_overextension"
+            ]
+          },
+          "options": [
+            {
+              "id": "emergency_oversight",
+              "description": "Ввести внешнее управление и сократить расходы",
+              "cost": {
+                "influence": 8
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": 50
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Зерновой пояс",
+                  "value": -3
+                }
+              ]
+            },
+            {
+              "id": "double_down",
+              "description": "Удвоить инвестиции, чтобы завершить ключевые объекты",
+              "cost": {
+                "gold": 110,
+                "labor": 30
+              },
+              "effects": [
+                {
+                  "type": "infrastructure",
+                  "target": "Зерновой пояс",
+                  "value": 4,
+                  "duration": 3
+                },
+                {
+                  "type": "stability",
+                  "target": "Зерновой пояс",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Проекты срываются, репутация властей подорвана.",
+            "effects": [
+              {
+                "type": "stability",
+                "target": "Зерновой пояс",
+                "value": -2
+              },
+              {
+                "type": "treasury",
+                "target": "gold",
+                "value": -80
+              }
+            ]
+          },
+          "origin": {
+            "regionName": "Зерновой пояс",
+            "milestone": 61.24790278986673,
+            "loyalty": 62.92481326350125,
+            "treasury": 213.73755000000006,
+            "source": "region.infrastructure.milestone"
+          }
+        },
+        "status": "failed",
+        "selectedOptionId": null,
+        "appliedEffects": [
+          {
+            "type": "stability",
+            "target": "Зерновой пояс",
+            "value": -2
+          },
+          {
+            "type": "treasury",
+            "target": "gold",
+            "value": -80
+          }
+        ],
+        "notes": "Провал из-за истечения времени",
+        "resolutionMode": "council",
+        "advisorPreview": {
+          "optionId": "emergency_oversight",
+          "notes": "Гибридный режим: критичное событие передано правителю для утверждения"
+        },
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "kpi.stability.crisis",
+          "category": "Социальные потрясения",
+          "severity": "moderate",
+          "title": "Население Кузнечный край требует гарантий и защиты",
+          "description": "Слухи о беспорядках в Кузнечный край распространяются по всей стране. Люди ожидают вмешательства власти.",
+          "factions": [
+            "Корона / центральная власть",
+            "Кузнечный край"
+          ],
+          "triggers": [
+            "metric:stability",
+            "metric:regions.Кузнечный край.loyalty"
+          ],
+          "conditions": {
+            "metrics": {
+              "stability": "<= 55",
+              "regions.Кузнечный край.loyalty": "<= 45"
+            }
+          },
+          "options": [
+            {
+              "id": "deploy_mediators",
+              "description": "Отправить внутренних инспекторов и выделить средства на местные проекты",
+              "cost": {
+                "influence": 4,
+                "gold": 35
+              },
+              "effects": [
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": 4
+                },
+                {
+                  "type": "stability",
+                  "target": "империя",
+                  "value": 1,
+                  "duration": 2
+                }
+              ]
+            },
+            {
+              "id": "promise_reforms",
+              "description": "Пообещать реформы и снизить налоговое давление",
+              "cost": {
+                "influence": 3
+              },
+              "effects": [
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": 2
+                },
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": -25
+                }
+              ],
+              "followUps": [
+                "estate.dissatisfaction"
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Протесты перерастают в очаги неповиновения и подрывают легитимность власти.",
+            "effects": [
+              {
+                "type": "loyalty",
+                "target": "Кузнечный край",
+                "value": -5
+              },
+              {
+                "type": "stability",
+                "target": "империя",
+                "value": -2
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.2,
+              "followUp": "region.loyalty.decline",
+              "description": "Неспособность урегулировать кризис в Кузнечный край может привести к открытому бунту."
+            }
+          ],
+          "origin": {
+            "regionName": "Кузнечный край",
+            "source": "kpi.stability.crisis"
+          }
+        },
+        "status": "deferred",
+        "selectedOptionId": null,
+        "appliedEffects": [],
+        "notes": "Сформировано системой раннего предупреждения",
+        "handoffIssued": false
+      },
+      {
+        "event": {
+          "id": "kpi.security.alert",
+          "category": "Военные угрозы",
+          "severity": "moderate",
+          "title": "Пограничные дозоры Кузнечный край сообщают о росте угроз",
+          "description": "Недофинансирование гарнизонов Кузнечный край оставляет границы без защиты.",
+          "factions": [
+            "Военное сословие / гарнизоны",
+            "Кузнечный край"
+          ],
+          "triggers": [
+            "metric:securityIndex",
+            "metric:regions.Кузнечный край.loyalty"
+          ],
+          "conditions": {
+            "metrics": {
+              "securityIndex": "<= 35"
+            }
+          },
+          "options": [
+            {
+              "id": "mobilize_reserves",
+              "description": "Увеличить военные ассигнования и усилить гарнизоны",
+              "cost": {
+                "gold": 60,
+                "labor": 20
+              },
+              "effects": [
+                {
+                  "type": "treasury",
+                  "target": "gold",
+                  "value": -40
+                },
+                {
+                  "type": "loyalty",
+                  "target": "Кузнечный край",
+                  "value": 3
+                },
+                {
+                  "type": "threat",
+                  "target": "border",
+                  "value": -1
+                }
+              ]
+            },
+            {
+              "id": "negotiate_truces",
+              "description": "Использовать дипломатию, чтобы выиграть время",
+              "cost": {
+                "influence": 6
+              },
+              "effects": [
+                {
+                  "type": "threat",
+                  "target": "границы",
+                  "value": -1
+                },
+                {
+                  "type": "reputation",
+                  "target": "Региональные элиты",
+                  "value": 1
+                }
+              ]
+            }
+          ],
+          "failure": {
+            "timeout": 1,
+            "description": "Пограничные инциденты учащаются, а гарнизоны теряют дисциплину.",
+            "effects": [
+              {
+                "type": "threat",
+                "target": "border",
+                "value": 2
+              },
+              {
+                "type": "stability",
+                "target": "империя",
+                "value": -2
+              },
+              {
+                "type": "loyalty",
+                "target": "Кузнечный край",
+                "value": -4
+              }
+            ]
+          },
+          "escalation": [
+            {
+              "chance": 0.25,
+              "followUp": "treasury.depletion",
+              "description": "Эскалация на границе Кузнечный край грозит перерасти в полномасштабный конфликт."
+            }
+          ],
+          "origin": {
+            "regionName": "Кузнечный край",
+            "source": "kpi.security.alert"
+          }
+        },
+        "status": "deferred",
+        "selectedOptionId": null,
+        "appliedEffects": [],
+        "notes": "Сформировано системой раннего предупреждения",
+        "handoffIssued": false
+      }
+    ],
+    "kpis": {
+      "stability": {
+        "value": 57.59,
+        "trend": 0,
+        "threatLevel": "moderate"
+      },
+      "economicGrowth": {
+        "value": 95.67,
+        "trend": 0,
+        "threatLevel": "low"
+      },
+      "securityIndex": {
+        "value": 8.41,
+        "trend": 0,
+        "threatLevel": "critical"
+      },
+      "activeCrises": {
+        "value": 0,
+        "trend": 0,
+        "threatLevel": "low"
+      }
+    },
+    "trust": {
+      "advisor": 0.58,
+      "estates": {
+        "дворянство": 0.6259649386208521,
+        "духовенство": 0.8019074861158723,
+        "буржуазия": 0.9,
+        "крестьянство": 0.7219074861158723,
+        "гильдии": 0.6859573979805895
+      }
+    },
+    "activeThreatLevel": 0.5,
+    "councilReports": [
+      {
+        "advisorId": "council_economy",
+        "advisorName": "Маркиз Лукреций Вальдор",
+        "portfolio": "economy",
+        "summary": "Контролирует поручения (прогресс 0%)",
+        "confidence": 0.623,
+        "focusDepartment": "economy"
+      },
+      {
+        "advisorId": "council_military",
+        "advisorName": "Генерал Ирена Крейс",
+        "portfolio": "military",
+        "summary": "Контролирует поручения (прогресс 0%)",
+        "confidence": 0.581,
+        "focusDepartment": "military"
+      },
+      {
+        "advisorId": "council_internal",
+        "advisorName": "Канцлер Элларион",
+        "portfolio": "internal",
+        "summary": "Контролирует поручения (прогресс 0%)",
+        "confidence": 0.672,
+        "focusDepartment": "internal"
+      },
+      {
+        "advisorId": "council_diplomacy",
+        "advisorName": "Посол Селеста Мирран",
+        "portfolio": "diplomacy",
+        "summary": "Сохраняет стабильное управление",
+        "confidence": 0.714,
+        "focusDepartment": "diplomacy"
+      },
+      {
+        "advisorId": "council_science",
+        "advisorName": "Магистр Талия Венр",
+        "portfolio": "science",
+        "summary": "Сохраняет стабильное управление",
+        "confidence": 0.609,
+        "focusDepartment": "science"
+      },
+      {
+        "advisorId": "council_intelligence",
+        "advisorName": "Теневой куратор Йорен",
+        "portfolio": "intelligence",
+        "summary": "Сохраняет стабильное управление",
+        "confidence": 0.539,
+        "focusDepartment": "internal"
+      }
+    ],
+    "mandateProgress": [
+      {
+        "mandateId": "mandate_capital_stability",
+        "label": "Стабилизировать Столичную марку",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Лояльность выросла на +0.0 пунктов"
+      },
+      {
+        "mandateId": "mandate_border_fort",
+        "label": "Усилить северные заставы",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Индекс безопасности изменился на +0.0"
+      },
+      {
+        "mandateId": "mandate_trade_corridor",
+        "label": "Развить торговый коридор",
+        "status": "not_started",
+        "progress": 0,
+        "confidence": 0.53,
+        "commentary": "Финансовые показатели сместились на +0.0"
+      }
+    ],
+    "projects": [
+      {
+        "id": "project_infrastructure_spine",
+        "name": "Имперский инфраструктурный хребет",
+        "focus": "economy",
+        "description": "Связать столичные маршруты с кузнечными мастерскими и зерновым поясом",
+        "milestones": [
+          0.25,
+          0.5,
+          0.75,
+          1
+        ],
+        "progress": 0.08,
+        "ownerAdvisorId": "council_internal",
+        "ownerAdvisorName": "Канцлер Элларион"
+      },
+      {
+        "id": "project_border_legion",
+        "name": "Легион пограничной стражи",
+        "focus": "military",
+        "description": "Подготовить мобильные силы для реагирования на кризисы и набеги",
+        "milestones": [
+          0.33,
+          0.66,
+          1
+        ],
+        "progress": 0.021,
+        "ownerAdvisorId": "council_military",
+        "ownerAdvisorName": "Генерал Ирена Крейс"
+      },
+      {
+        "id": "project_arcane_college",
+        "name": "Аркана-коллегия",
+        "focus": "science",
+        "description": "Расширить научные лаборатории и магические мастерские",
+        "milestones": [
+          0.5,
+          1
+        ],
+        "progress": 0.045,
+        "ownerAdvisorId": "council_science",
+        "ownerAdvisorName": "Магистр Талия Венр"
+      }
+    ],
+    "agendaHighlights": [
+      {
+        "department": "internal",
+        "priority": "push",
+        "commentary": "Приоритетное усиление"
+      },
+      {
+        "department": "economy",
+        "priority": "push",
+        "commentary": "Приоритетное усиление"
+      },
+      {
+        "department": "military",
+        "priority": "steady",
+        "commentary": "Бюджет распределён ровно"
+      }
+    ],
+    "advisorConsultations": [
+      {
+        "id": "kpi:securityIndex",
+        "type": "kpi",
+        "topic": "КПИ: Индекс безопасности",
+        "prompt": "Запросить советы по показателю «Индекс безопасности».",
+        "summary": "КПИ: Индекс безопасности: требуется вмешательство — 2 советник(ов) требуют немедленных действий.",
+        "responses": [
+          {
+            "advisorId": "council_military",
+            "advisorName": "Генерал Ирена Крейс",
+            "stance": "escalate",
+            "summary": "Генерал Ирена Крейс оценивает показатель как критический.",
+            "rationale": [
+              "Значение 8.41 с трендом 0.00 и уровнем угрозы critical.",
+              "Ресурсы казны: 54 зол., влияние 111.",
+              "Сословие «дворянство» ожидает мер (доверие 63%)."
+            ],
+            "recommendedAction": "Немедленно перераспределить бюджет в пользу направления «Военное ведомство» и задействовать резервы.",
+            "kpiFocus": "securityIndex"
+          },
+          {
+            "advisorId": "council_intelligence",
+            "advisorName": "Теневой куратор Йорен",
+            "stance": "escalate",
+            "summary": "Теневой куратор Йорен оценивает показатель как критический.",
+            "rationale": [
+              "Значение 8.41 с трендом 0.00 и уровнем угрозы critical.",
+              "Ресурсы казны: 54 зол., влияние 111.",
+              "Сословие «дворянство» ожидает мер (доверие 63%)."
+            ],
+            "recommendedAction": "Немедленно перераспределить бюджет в пользу направления «Военное ведомство» и задействовать резервы.",
+            "kpiFocus": "securityIndex"
+          }
+        ],
+        "recommendations": [
+          "Немедленно перераспределить бюджет в пользу направления «Военное ведомство» и задействовать резервы."
+        ],
+        "handoffTarget": "Координационный штаб: Военное ведомство",
+        "handoffIssued": false,
+        "relatedKpi": "securityIndex",
+        "relatedDepartment": "military"
+      },
+      {
+        "id": "event:region.infrastructure.overextension",
+        "type": "event",
+        "topic": "Событие: Перерасход бюджета в Столичная марка достигает критической точки",
+        "prompt": "Собрать советы по событию «Перерасход бюджета в Столичная марка достигает критической точки».",
+        "summary": "Событие: Перерасход бюджета в Столичная марка достигает критической точки: требуется вмешательство — 2 советник(ов) требуют немедленных действий.",
+        "responses": [
+          {
+            "advisorId": "council_internal",
+            "advisorName": "Канцлер Элларион",
+            "stance": "escalate",
+            "summary": "Канцлер Элларион предлагает немедленное вмешательство.",
+            "rationale": [
+              "Событие major серьёзности со статусом «failed».",
+              "Регион: Столичная марка.",
+              "Заметка: Провал из-за истечения времени."
+            ],
+            "recommendedAction": "Эскалировать инцидент и назначить оперативный штаб «Внутренняя политика»."
+          },
+          {
+            "advisorId": "council_intelligence",
+            "advisorName": "Теневой куратор Йорен",
+            "stance": "escalate",
+            "summary": "Теневой куратор Йорен предлагает немедленное вмешательство.",
+            "rationale": [
+              "Событие major серьёзности со статусом «failed».",
+              "Регион: Столичная марка.",
+              "Заметка: Провал из-за истечения времени."
+            ],
+            "recommendedAction": "Эскалировать инцидент и назначить оперативный штаб «Внутренняя политика»."
+          }
+        ],
+        "recommendations": [
+          "Эскалировать инцидент и назначить оперативный штаб «Внутренняя политика»."
+        ],
+        "handoffTarget": "Передать исполнение: Внутренняя политика",
+        "handoffIssued": false,
+        "relatedEventId": "region.infrastructure.overextension",
+        "relatedDepartment": "internal"
+      },
+      {
+        "id": "department:science",
+        "type": "department",
+        "topic": "Ведомство: Наука",
+        "prompt": "Уточнить план действий для ведомства «Наука».",
+        "summary": "Ведомство: Наука: требуется вмешательство — 1 советник(ов) требуют немедленных действий.",
+        "responses": [
+          {
+            "advisorId": "council_science",
+            "advisorName": "Магистр Талия Венр",
+            "stance": "escalate",
+            "summary": "Магистр Талия Венр просит вмешательства.",
+            "rationale": [
+              "Текущая эффективность 0.85, бюджет квартала 75.3 золота.",
+              "Совокупные инвестиции: 75.3 золота.",
+              "Сословие «гильдии» оценивает ситуацию на уровне 69 ед."
+            ],
+            "recommendedAction": "Назначить кризисную команду и усилить финансирование «Наука»."
+          }
+        ],
+        "recommendations": [
+          "Назначить кризисную команду и усилить финансирование «Наука»."
+        ],
+        "handoffTarget": "Передать исполнение: Наука",
+        "handoffIssued": false,
+        "relatedDepartment": "science"
+      }
+    ],
+    "controlMode": "hybrid"
+  },
+  "interventionLog": [
+    {
+      "eventId": "region.infrastructure.milestone",
+      "eventTitle": "Инфраструктура Столичная марка достигает нового рубежа",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "diversify_budget",
+      "advisorOptionId": "diversify_budget",
+      "remainingTime": 2,
+      "timestamp": "2025-11-01T15:30:45.544Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.milestone",
+      "eventTitle": "Инфраструктура Зерновой пояс достигает нового рубежа",
+      "quarter": 1,
+      "mode": "player",
+      "optionId": "infrastructure_bonus",
+      "advisorOptionId": "diversify_budget",
+      "remainingTime": 2,
+      "timestamp": "2025-11-01T15:30:55.716Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.milestone",
+      "eventTitle": "Инфраструктура Кузнечный край достигает нового рубежа",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "diversify_budget",
+      "advisorOptionId": "diversify_budget",
+      "remainingTime": 2,
+      "timestamp": "2025-11-01T15:31:11.580Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.stagnation",
+      "eventTitle": "Темпы строительства в регионе Столичная марка замирают",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "scale_back",
+      "advisorOptionId": "scale_back",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:31:12.743Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.audit",
+      "eventTitle": "Аудит инфраструктурных проектов в регионе Зерновой пояс",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "accept_results",
+      "advisorOptionId": "accept_results",
+      "remainingTime": 2,
+      "timestamp": "2025-11-01T15:31:14.157Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.stagnation",
+      "eventTitle": "Темпы строительства в регионе Кузнечный край замирают",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "scale_back",
+      "advisorOptionId": "scale_back",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:31:17.224Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.overextension",
+      "eventTitle": "Перерасход бюджета в Столичная марка достигает критической точки",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "emergency_oversight",
+      "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "advisorOptionId": "emergency_oversight",
+      "advisorNotes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:31:17.968Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.stagnation",
+      "eventTitle": "Темпы строительства в регионе Зерновой пояс замирают",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "scale_back",
+      "advisorOptionId": "scale_back",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:31:18.470Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.overextension",
+      "eventTitle": "Перерасход бюджета в Кузнечный край достигает критической точки",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "emergency_oversight",
+      "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "advisorOptionId": "emergency_oversight",
+      "advisorNotes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:41:46.554Z",
+      "handoffIssued": false
+    },
+    {
+      "eventId": "region.infrastructure.overextension",
+      "eventTitle": "Перерасход бюджета в Зерновой пояс достигает критической точки",
+      "quarter": 1,
+      "mode": "council",
+      "optionId": "emergency_oversight",
+      "notes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "advisorOptionId": "emergency_oversight",
+      "advisorNotes": "Гибридный режим: критичное событие передано правителю для утверждения",
+      "remainingTime": 1,
+      "timestamp": "2025-11-01T15:41:47.803Z",
+      "handoffIssued": false
+    }
+  ],
+  "totals": {
+    "incomes": {
+      "gold": 348.74,
+      "influence": 38.81,
+      "labor": 260.92
+    },
+    "expenses": {
+      "departments": {
+        "economy": 180.19,
+        "diplomacy": 45.2,
+        "internal": 83.97,
+        "military": 35.32,
+        "science": 75.32
+      },
+      "total": 420
+    }
+  }
+}
