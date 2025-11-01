@@ -1,8 +1,12 @@
 import { buildBaselineConfig } from "./config";
 import { runSimulation } from "./simulation";
 import {
+  AgendaHighlight,
+  CouncilReport,
   KPIEntry,
   KPIReport,
+  MandateProgressReport,
+  MandateStatus,
   SimulationEventEffect,
   ThreatLevel,
 } from "./types";
@@ -55,6 +59,63 @@ function logKPIBlock(report: KPIReport) {
   console.log(` • ${summarizeKPI("Экономический рост", report.economicGrowth)}`);
   console.log(` • ${summarizeKPI("Индекс безопасности", report.securityIndex)}`);
   console.log(` • ${summarizeKPI("Активные кризисы", report.activeCrises)}`);
+}
+
+function formatMandateStatus(status: MandateStatus): string {
+  switch (status) {
+    case "completed":
+      return "завершено";
+    case "on_track":
+      return "в графике";
+    case "in_progress":
+      return "в работе";
+    case "at_risk":
+      return "под угрозой";
+    case "failed":
+      return "провалено";
+    case "not_started":
+    default:
+      return "не начато";
+  }
+}
+
+function logCouncilReports(reports: CouncilReport[]) {
+  if (reports.length === 0) {
+    return;
+  }
+  console.log("Советники:");
+  for (const report of reports) {
+    const confidence = (report.confidence * 100).toFixed(1);
+    const focus = report.focusDepartment ? `, фокус: ${report.focusDepartment}` : "";
+    console.log(` • ${report.advisorName}${focus} — ${report.summary} (уверенность ${confidence}%)`);
+    if (report.alerts && report.alerts.length > 0) {
+      for (const alert of report.alerts) {
+        console.log(`   ⚠ ${alert}`);
+      }
+    }
+  }
+}
+
+function logMandateProgress(entries: MandateProgressReport[]) {
+  if (entries.length === 0) {
+    return;
+  }
+  console.log("Поручения правителя:");
+  for (const entry of entries) {
+    const progress = (entry.progress * 100).toFixed(0);
+    console.log(` • ${entry.label} — ${formatMandateStatus(entry.status)} (${progress}%, уверенность ${(entry.confidence * 100).toFixed(0)}%)`);
+    console.log(`   ${entry.commentary}`);
+  }
+}
+
+function logAgendaHighlights(highlights: AgendaHighlight[]) {
+  if (highlights.length === 0) {
+    return;
+  }
+  console.log("Приоритеты совета:");
+  for (const highlight of highlights) {
+    console.log(` • ${highlight.department}: ${highlight.commentary} (режим ${highlight.priority})`);
+  }
 }
 
 const config = buildBaselineConfig();
@@ -137,6 +198,10 @@ for (const report of result.reports) {
       }
     }
   }
+
+  logCouncilReports(report.councilReports);
+  logMandateProgress(report.mandateProgress);
+  logAgendaHighlights(report.agendaHighlights);
 }
 
 console.log("\n=== Итоги года ===");
@@ -184,6 +249,32 @@ for (const region of result.finalState.regions) {
   console.log(
     ` - ${region.name}: богатство ${region.wealth.toFixed(1)}, лояльность ${region.loyalty.toFixed(1)}%, инфраструктура ${region.infrastructure.toFixed(1)}`
   );
+}
+
+console.log("\nСовет при правителе:");
+for (const councilor of result.finalState.council) {
+  const motivation = (councilor.motivation * 100).toFixed(0);
+  const stress = (councilor.stress * 100).toFixed(0);
+  console.log(
+    ` - ${councilor.name} (${councilor.portfolio}): мотивация ${motivation}%, стресс ${stress}%`
+  );
+  if (councilor.lastQuarterSummary) {
+    console.log(`   ${councilor.lastQuarterSummary}`);
+  }
+}
+
+console.log("\nСтратегическая повестка:");
+for (const [department, priority] of Object.entries(result.finalState.plan.priorities)) {
+  console.log(` - ${department}: режим ${priority}`);
+}
+
+if (result.finalState.plan.projects.length > 0) {
+  console.log("Проекты:");
+  for (const project of result.finalState.plan.projects) {
+    console.log(
+      ` • ${project.name}: ${(project.progress * 100).toFixed(0)}% (${project.focus})`
+    );
+  }
 }
 
 console.log(`\nСохранение симуляции: ${saveInfo.directory}`);

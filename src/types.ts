@@ -21,6 +21,130 @@ export const DEPARTMENTS: Department[] = [
   "science",
 ];
 
+export type StrategicPriorityLevel = "neglect" | "steady" | "push";
+
+export type CouncilPortfolio =
+  | Department
+  | "navy"
+  | "intelligence"
+  | "logistics";
+
+export type ResponsePostureMode = "forceful" | "balanced" | "diplomatic" | "covert";
+
+export interface ResponsePostureSettings {
+  default: ResponsePostureMode;
+  perCategory?: Partial<Record<EventCategory, ResponsePostureMode>>;
+}
+
+export type MandateGoal =
+  | "stabilize_region"
+  | "fortify_border"
+  | "boost_economy"
+  | "advance_science"
+  | "improve_diplomacy"
+  | "suppress_unrest"
+  | "expand_influence";
+
+export type MandateUrgency = "low" | "medium" | "high";
+
+export interface StrategicMandate {
+  id: string;
+  label: string;
+  goal: MandateGoal;
+  target:
+    | { kind: "region"; name: string }
+    | { kind: "estate"; name: string }
+    | { kind: "global" };
+  urgency: MandateUrgency;
+  horizon: number;
+  notes?: string;
+  issuedQuarter?: number;
+}
+
+export type MandateStatus =
+  | "not_started"
+  | "in_progress"
+  | "on_track"
+  | "at_risk"
+  | "completed"
+  | "failed";
+
+export interface MandateState extends StrategicMandate {
+  progress: number;
+  status: MandateStatus;
+  confidence: number;
+  lastReport?: string;
+  baselineValue?: number;
+  targetValue?: number;
+}
+
+export interface CouncilMember {
+  id: string;
+  name: string;
+  portfolio: CouncilPortfolio;
+  competence: number;
+  loyalty: number;
+  traits: string[];
+  favoredMandates?: MandateGoal[];
+  caution?: number;
+}
+
+export interface CouncilMemberState extends CouncilMember {
+  stress: number;
+  motivation: number;
+  assignedMandates: string[];
+  focusDepartment?: Department;
+  lastQuarterSummary?: string;
+}
+
+export interface StrategicProject {
+  id: string;
+  name: string;
+  focus: Department | "security" | "administration";
+  description: string;
+  milestones: number[];
+  progress: number;
+  ownerAdvisorId?: string;
+}
+
+export interface StrategicAgenda {
+  name: string;
+  priorities: Partial<Record<Department, StrategicPriorityLevel>>;
+  mandates: StrategicMandate[];
+  projects: StrategicProject[];
+}
+
+export interface StrategicPlanState {
+  priorities: Record<Department, StrategicPriorityLevel>;
+  mandates: MandateState[];
+  projects: StrategicProject[];
+}
+
+export interface CouncilReport {
+  advisorId: string;
+  advisorName: string;
+  portfolio: CouncilPortfolio;
+  summary: string;
+  confidence: number;
+  focusDepartment?: Department;
+  alerts?: string[];
+}
+
+export interface MandateProgressReport {
+  mandateId: string;
+  label: string;
+  status: MandateStatus;
+  progress: number;
+  confidence: number;
+  commentary: string;
+}
+
+export interface AgendaHighlight {
+  department: Department;
+  priority: StrategicPriorityLevel;
+  commentary: string;
+}
+
 export interface Region {
   name: string;
   population: number;
@@ -71,6 +195,8 @@ export interface AdvisorContext {
   departments: DepartmentState[];
   decree: Decree;
   trust: TrustLevels;
+  agenda?: StrategicPlanState;
+  council?: CouncilMemberState[];
 }
 
 export type BudgetAllocation = Partial<Record<Department, number>>;
@@ -196,6 +322,9 @@ export interface EventDecisionContext {
   departments: DepartmentState[];
   trust: TrustLevels;
   kpis: KPIReport | null;
+  posture: ResponsePostureMode;
+  agenda: StrategicPlanState;
+  council: CouncilMemberState[];
 }
 
 export interface EventResolution {
@@ -237,6 +366,9 @@ export interface QuarterlyReport {
   kpis: KPIReport;
   trust: TrustLevels;
   activeThreatLevel: number;
+  councilReports: CouncilReport[];
+  mandateProgress: MandateProgressReport[];
+  agendaHighlights: AgendaHighlight[];
 }
 
 export interface SimulationConfig {
@@ -253,6 +385,9 @@ export interface SimulationConfig {
   decree: Decree;
   initialTrust?: TrustLevels;
   eventDecisionStrategy?: EventDecisionStrategy;
+  agenda: StrategicAgenda;
+  council: CouncilMember[];
+  responsePosture: ResponsePostureSettings;
 }
 
 export interface KPIAverages {
@@ -279,5 +414,7 @@ export interface SimulationResult {
     departments: DepartmentState[];
     trust: TrustLevels;
     activeThreatLevel: number;
+    council: CouncilMemberState[];
+    plan: StrategicPlanState;
   };
 }

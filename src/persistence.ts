@@ -8,6 +8,9 @@ export interface ConfigSummary {
   advisor: string;
   decree: SimulationConfig["decree"];
   initialResources: SimulationConfig["initialResources"];
+  agenda: SimulationConfig["agenda"];
+  council: SimulationConfig["council"];
+  responsePosture: SimulationConfig["responsePosture"];
 }
 
 export interface SimulationSaveManifest {
@@ -64,6 +67,17 @@ function buildConfigSummary(config: SimulationConfig | undefined): ConfigSummary
     advisor: config.advisor.name ?? "Неизвестный советник",
     decree: config.decree,
     initialResources: config.initialResources,
+    agenda: {
+      name: config.agenda.name,
+      priorities: { ...config.agenda.priorities },
+      mandates: config.agenda.mandates.map((mandate) => ({ ...mandate })),
+      projects: config.agenda.projects.map((project) => ({ ...project })),
+    },
+    council: config.council.map((member) => ({ ...member })),
+    responsePosture: {
+      default: config.responsePosture.default,
+      perCategory: config.responsePosture.perCategory ? { ...config.responsePosture.perCategory } : undefined,
+    },
   };
 }
 

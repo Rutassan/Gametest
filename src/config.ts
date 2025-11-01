@@ -1,6 +1,6 @@
 import { ReformistScholar } from "./advisors";
-import { departments, estates, initialResources, regions } from "./data";
-import { SimulationConfig } from "./types";
+import { councilMembers, departments, estates, initialResources, regions, strategicAgenda } from "./data";
+import { SimulationConfig, StrategicAgenda, CouncilMember, ResponsePostureSettings } from "./types";
 import { pragmaticDecisionStrategy } from "./strategies";
 
 export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): SimulationConfig {
@@ -10,6 +10,30 @@ export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): 
     investmentPriority: "infrastructure" as const,
     taxPolicy: "standard" as const,
   };
+
+  const defaultPosture: ResponsePostureSettings = overrides.responsePosture ?? {
+    default: "balanced",
+    perCategory: {
+      "Военные угрозы": "forceful",
+      "Дипломатические кризисы": "diplomatic",
+      "Социальные потрясения": "balanced",
+      "Политические интриги": "covert",
+      "Экономический кризис": "balanced",
+    },
+  };
+
+  const baseAgenda: StrategicAgenda = overrides.agenda
+    ? overrides.agenda
+    : {
+        name: strategicAgenda.name,
+        priorities: { ...strategicAgenda.priorities },
+        mandates: strategicAgenda.mandates.map((mandate) => ({ ...mandate })),
+        projects: strategicAgenda.projects.map((project) => ({ ...project })),
+      };
+
+  const baseCouncil: CouncilMember[] = overrides.council
+    ? overrides.council
+    : councilMembers.map((member) => ({ ...member }));
 
   return {
     quarters: overrides.quarters ?? 4,
@@ -22,5 +46,8 @@ export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): 
     decree,
     initialTrust: overrides.initialTrust,
     eventDecisionStrategy: overrides.eventDecisionStrategy ?? pragmaticDecisionStrategy,
+    agenda: baseAgenda,
+    council: baseCouncil,
+    responsePosture: defaultPosture,
   };
 }
