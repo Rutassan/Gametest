@@ -3,9 +3,37 @@ import { join } from "path";
 import { buildBaselineConfig } from "./config";
 import { runSimulation } from "./simulation";
 
+function generateSparkline(values: number[], color = "#38bdf8"): string {
+  if (values.length === 0) {
+    return "";
+  }
+  const width = 160;
+  const height = 40;
+  const min = Math.min(...values);
+  const max = Math.max(...values);
+  const range = max - min || 1;
+  const step = values.length > 1 ? width / (values.length - 1) : width;
+  const points = values
+    .map((value, index) => {
+      const x = Math.round(index * step);
+      const y = Math.round(height - ((value - min) / range) * height);
+      return `${x},${y}`;
+    })
+    .join(" ");
+
+  const lastValue = values[values.length - 1];
+  const lastY = height - ((lastValue - min) / range) * height;
+
+  return `
+    <svg width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">
+      <polyline points="${points}" fill="none" stroke="${color}" stroke-width="2" />
+      <circle cx="${width}" cy="${lastY}" r="3" fill="${color}" />
+    </svg>
+  `;
+}
+
 const config = buildBaselineConfig();
 const result = runSimulation(config);
-
 const summary = result.kpiSummary;
 const reports = result.reports;
 const targetDir = join(process.cwd(), "dist");
@@ -74,6 +102,54 @@ const eventsBlock = reports
 
 const estateTrustRows = Object.entries(result.finalState.trust.estates)
   .map(([name, value]) => `<li>${name}: ${(value * 100).toFixed(1)}%</li>`)
+  .join("");
+
+const regionMetrics = new Map<
+  string,
+  { wealth: number[]; loyalty: number[]; infrastructure: number[] }
+>();
+
+for (const report of reports) {
+  for (const snapshot of report.regions) {
+    if (!regionMetrics.has(snapshot.name)) {
+      regionMetrics.set(snapshot.name, { wealth: [], loyalty: [], infrastructure: [] });
+    }
+    const entry = regionMetrics.get(snapshot.name)!;
+    entry.wealth.push(snapshot.wealth);
+    entry.loyalty.push(snapshot.loyalty);
+    entry.infrastructure.push(snapshot.infrastructure);
+  }
+}
+
+const regionCards = Array.from(regionMetrics.entries())
+  .map(([name, metrics]) => {
+    const wealthSpark = generateSparkline(metrics.wealth, "#f97316");
+    const loyaltySpark = generateSparkline(metrics.loyalty, "#22c55e");
+    const infraSpark = generateSparkline(metrics.infrastructure, "#38bdf8");
+
+    const latestIndex = metrics.wealth.length - 1;
+    const latestWealth = metrics.wealth[latestIndex].toFixed(1);
+    const latestLoyalty = metrics.loyalty[latestIndex].toFixed(1);
+    const latestInfra = metrics.infrastructure[latestIndex].toFixed(1);
+
+    return `
+      <article class="region-card">
+        <h3>${name}</h3>
+        <div class="metric">
+          <span class="metric-label">Богатство: ${latestWealth}</span>
+          <span class="sparkline">${wealthSpark}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Лояльность: ${latestLoyalty}%</span>
+          <span class="sparkline">${loyaltySpark}</span>
+        </div>
+        <div class="metric">
+          <span class="metric-label">Инфраструктура: ${latestInfra}</span>
+          <span class="sparkline">${infraSpark}</span>
+        </div>
+      </article>
+    `;
+  })
   .join("");
 
 const html = `<!DOCTYPE html>
@@ -193,6 +269,37 @@ const html = `<!DOCTYPE html>
         border: 1px solid rgba(59, 130, 246, 0.6);
         color: #60a5fa;
       }
+      .regions-grid {
+        margin-top: 32px;
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 16px;
+      }
+      .region-card {
+        background: rgba(15, 23, 42, 0.7);
+        border: 1px solid rgba(56, 189, 248, 0.25);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .region-card h3 {
+        margin: 0 0 12px;
+        color: #bae6fd;
+      }
+      .metric {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        gap: 12px;
+      }
+      .metric-label {
+        font-size: 14px;
+        color: #f1f5f9;
+      }
+      .sparkline svg {
+        border-radius: 6px;
+        background: rgba(30, 41, 59, 0.6);
+      }
     </style>
   </head>
   <body>
@@ -241,6 +348,13 @@ const html = `<!DOCTYPE html>
       <section>
         <h2>Журнал событий</h2>
         ${eventsBlock || "<p>Кризисов не обнаружено.</p>"}
+      </section>
+
+      <section>
+        <h2>Динамика регионов</h2>
+        <div class="regions-grid">
+          ${regionCards}
+        </div>
       </section>
     </main>
   </body>

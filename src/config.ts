@@ -1,6 +1,7 @@
 import { ReformistScholar } from "./advisors";
 import { departments, estates, initialResources, regions } from "./data";
 import { SimulationConfig } from "./types";
+import { pragmaticDecisionStrategy } from "./strategies";
 
 export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): SimulationConfig {
   const advisor = overrides.advisor ?? new ReformistScholar();
@@ -20,6 +21,6 @@ export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): 
     advisor,
     decree,
     initialTrust: overrides.initialTrust,
-    eventDecisionStrategy: overrides.eventDecisionStrategy,
+    eventDecisionStrategy: overrides.eventDecisionStrategy ?? pragmaticDecisionStrategy,
   };
 }
