@@ -44,6 +44,7 @@ import {
 } from "./decrees";
 
 const QUARTER_DURATION = 3;
+const SECURITY_ESCALATION_THRESHOLDS = [0.8, 2.6, 4.2];
 
 interface TimedEffect {
   effect: SimulationEventEffect;
@@ -56,6 +57,9 @@ interface GlobalModifiers {
   threat: number;
   budget: number;
   reputation: Record<string, number>;
+  securityPressure: number;
+  securityEscalationStage: number;
+  securityRecovery: number;
 }
 
 function cloneResources(pool: ResourcePool): ResourcePool {
@@ -307,6 +311,11 @@ function applyEventEffect(
     case "threat":
       modifiers.threat += value;
       break;
+    case "securityPressure":
+      modifiers.securityPressure = Number(
+        Math.max(0, modifiers.securityPressure + value).toFixed(2)
+      );
+      break;
     case "budget":
       modifiers.budget += value;
       break;
@@ -386,11 +395,81 @@ function generateKpiEvents(kpis: KPIReport, regions: Region[]): SimulationEvent[
     events.push(createEventFromTemplate("kpi.economy.recession", {}));
   }
 
-  if (kpis.securityIndex.threatLevel !== "low") {
-    const borderRegion = [...regions].sort((a, b) => a.loyalty - b.loyalty)[0];
-    events.push(
-      createEventFromTemplate("kpi.security.alert", { region: borderRegion })
+  return events;
+}
+
+function evaluateSecurityEscalation(
+  kpis: KPIReport,
+  regions: Region[],
+  modifiers: GlobalModifiers
+): SimulationEvent[] {
+  const events: SimulationEvent[] = [];
+  if (regions.length === 0) {
+    return events;
+  }
+
+  const borderRegion = [...regions].sort((a, b) => a.loyalty - b.loyalty)[0];
+
+  if (kpis.securityIndex.threatLevel === "low") {
+    modifiers.securityRecovery = Math.min(modifiers.securityRecovery + 1, 4);
+    modifiers.securityPressure = Number(
+      Math.max(0, modifiers.securityPressure - 1).toFixed(2)
     );
+
+    while (
+      modifiers.securityEscalationStage > 0 &&
+      modifiers.securityPressure <
+        SECURITY_ESCALATION_THRESHOLDS[modifiers.securityEscalationStage - 1] - 0.7
+    ) {
+      modifiers.securityEscalationStage -= 1;
+    }
+
+    if (modifiers.threat > 0) {
+      modifiers.threat = Number(Math.max(0, modifiers.threat - 0.35).toFixed(2));
+    }
+
+    return events;
+  }
+
+  const pressureGain = kpis.securityIndex.threatLevel === "critical" ? 1.4 : 0.65;
+  const threatGain = kpis.securityIndex.threatLevel === "critical" ? 0.5 : 0.25;
+
+  modifiers.securityPressure = Number(
+    Math.min(6, modifiers.securityPressure + pressureGain).toFixed(2)
+  );
+  modifiers.threat = Number((modifiers.threat + threatGain).toFixed(2));
+  modifiers.securityRecovery = 0;
+
+  while (
+    modifiers.securityEscalationStage < SECURITY_ESCALATION_THRESHOLDS.length &&
+    modifiers.securityPressure >=
+      SECURITY_ESCALATION_THRESHOLDS[modifiers.securityEscalationStage]
+  ) {
+    modifiers.securityEscalationStage += 1;
+    const stage = modifiers.securityEscalationStage;
+
+    if (stage === 1) {
+      events.push(
+        createEventFromTemplate("kpi.security.alert", {
+          region: borderRegion,
+          threatLevel: "moderate",
+        })
+      );
+    } else if (stage === 2) {
+      events.push(
+        createEventFromTemplate("security.border.skirmish", {
+          region: borderRegion,
+          threatLevel: "moderate",
+        })
+      );
+    } else if (stage === 3) {
+      events.push(
+        createEventFromTemplate("security.border.crisis", {
+          region: borderRegion,
+          threatLevel: "critical",
+        })
+      );
+    }
   }
 
   return events;
@@ -811,6 +890,9 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     threat: 0,
     budget: 0,
     reputation: {},
+    securityPressure: 0,
+    securityEscalationStage: 0,
+    securityRecovery: 0,
   };
   const timedEffects: TimedEffect[] = [];
   const activeEvents: ActiveEvent[] = [];
@@ -988,7 +1070,10 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     previousCrises = kpis.activeCrises.value;
     latestKPI = kpis;
 
-    const kpiTriggeredEvents = generateKpiEvents(kpis, regions);
+    const kpiTriggeredEvents = [
+      ...generateKpiEvents(kpis, regions),
+      ...evaluateSecurityEscalation(kpis, regions, modifiers),
+    ];
     if (kpiTriggeredEvents.length > 0) {
       enqueueEvents(activeEvents, kpiTriggeredEvents, quarter);
       for (const event of kpiTriggeredEvents) {
@@ -1043,6 +1128,9 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     modifiers.stability = Number((modifiers.stability * 0.85).toFixed(2));
     modifiers.threat = Number((modifiers.threat * 0.9).toFixed(2));
     modifiers.budget = Number((modifiers.budget * 0.75).toFixed(2));
+    modifiers.securityPressure = Number(
+      Math.max(0, modifiers.securityPressure * 0.92).toFixed(2)
+    );
     for (const key of Object.keys(modifiers.reputation)) {
       modifiers.reputation[key] = Number((modifiers.reputation[key] * 0.9).toFixed(2));
     }

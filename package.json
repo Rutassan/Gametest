@@ -6,7 +6,8 @@
   "scripts": {
     "build": "tsc",
     "simulate": "ts-node src/index.ts",
-    "dashboard": "ts-node src/ui.ts"
+    "dashboard": "ts-node src/ui.ts",
+    "test": "vitest"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +16,7 @@
   "devDependencies": {
     "@types/node": "^24.9.2",
     "ts-node": "^10.9.2",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^1.6.0"
   }
 }

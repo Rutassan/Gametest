@@ -1247,6 +1247,308 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
       },
     ],
   },
+  "security.border.skirmish": {
+    id: "security.border.skirmish",
+    category: "Военные угрозы",
+    severity: "moderate",
+    title: ({ region }) =>
+      region
+        ? `На границе ${region.name} вспыхивают столкновения`
+        : "Пограничные гарнизоны сообщают о сериях нападений",
+    description: ({ region }) =>
+      region
+        ? `Разведка фиксирует рейды противника и диверсии на территории ${region.name}.`
+        : "Линия обороны подвергается многочисленным вылазкам, требуются срочные меры.",
+    factions: ({ region }) =>
+      region ? ["Военное сословие / гарнизоны", region.name] : ["Военное сословие / гарнизоны"],
+    triggers: ({ region }) => [
+      "metric:securityIndex",
+      region ? `metric:regions.${region.name}.loyalty` : "metric:loyalty",
+    ],
+    conditions: () => ({
+      metrics: {
+        securityIndex: "<= 48",
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "deploy_reserves",
+        description: "Направить резервные части и укрепить линии снабжения",
+        cost: { gold: 80, labor: 25 },
+        effects: [
+          { type: "threat", target: "border", value: -1.2 },
+          { type: "loyalty", target: region?.name ?? "", value: 4 },
+          { type: "securityPressure", target: "border", value: -1 },
+          { type: "treasury", target: "gold", value: -40 },
+        ],
+      },
+      {
+        id: "broker_local_truce",
+        description: "Попытаться выкупить перемирие через местных элит",
+        cost: { influence: 10 },
+        effects: [
+          { type: "securityPressure", target: "frontier", value: -0.6 },
+          { type: "reputation", target: region?.name ?? "пограничные элиты", value: 2 },
+          { type: "stability", target: region?.name ?? "", value: 1 },
+        ],
+        followUps: ["security.border.intelligence"],
+      },
+      {
+        id: "delay_response",
+        description: "Ограничиться дипломатическими нотами и разведкой",
+        effects: [
+          { type: "securityPressure", target: "frontier", value: -0.2 },
+        ],
+        followUps: ["security.border.crisis"],
+      },
+    ],
+    failure: ({ region }) => ({
+      timeout: 1,
+      description:
+        "Противник захватывает заставы, а местные гарнизоны несут потери.",
+      effects: [
+        { type: "threat", target: "border", value: 1.6 },
+        { type: "loyalty", target: region?.name ?? "", value: -4 },
+        { type: "stability", target: region?.name ?? "", value: -2 },
+      ],
+    }),
+  },
+  "security.border.intelligence": {
+    id: "security.border.intelligence",
+    category: "Военные угрозы",
+    severity: "minor",
+    title: ({ region }) =>
+      region
+        ? `Тайная канцелярия раскрывает заговор в ${region.name}`
+        : "Агентура докладывает о подготовке новых атак",
+    description: ({ region }) =>
+      region
+        ? `Шпионы обнаружили координационный центр нападений на территорию ${region.name}.`
+        : "Аналитики фиксируют скрытую поддержку вторжения извне.",
+    factions: () => ["Тайная канцелярия / шпионы", "Военное сословие / гарнизоны"],
+    triggers: () => ["followup:security.border.skirmish"],
+    conditions: () => ({
+      metrics: {
+        securityIndex: "<= 55",
+      },
+    }),
+    options: () => [
+      {
+        id: "strike_back",
+        description: "Провести точечные операции по ликвидации штаба",
+        cost: { influence: 8, labor: 12 },
+        effects: [
+          { type: "threat", target: "enemy", value: -1 },
+          { type: "securityPressure", target: "frontier", value: -0.8 },
+        ],
+      },
+      {
+        id: "gather_more",
+        description: "Собрать дополнительную информацию, не раскрывая себя",
+        effects: [
+          { type: "securityPressure", target: "frontier", value: -0.3 },
+        ],
+        followUps: ["security.border.crisis"],
+      },
+    ],
+    failure: () => ({
+      timeout: 2,
+      description:
+        "Операция проваливается, агенты раскрыты, а противник усиливает проникновение.",
+      effects: [
+        { type: "threat", target: "border", value: 1 },
+        { type: "securityPressure", target: "frontier", value: 0.5 },
+      ],
+    }),
+  },
+  "security.border.crisis": {
+    id: "security.border.crisis",
+    category: "Военные угрозы",
+    severity: "major",
+    title: ({ region }) =>
+      region
+        ? `В ${region.name} вспыхивает полномасштабный кризис безопасности`
+        : "Империя сталкивается с угрозой вторжения",
+    description: ({ region }) =>
+      region
+        ? `Мятежные силы захватывают укрепления ${region.name}, гарнизон просит чрезвычайных полномочий.`
+        : "Совет обороны предупреждает: без немедленных действий империя рискует потерять провинции.",
+    factions: ({ region }) =>
+      region
+        ? ["Военное сословие / гарнизоны", "Корона / центральная власть", region.name]
+        : ["Военное сословие / гарнизоны", "Корона / центральная власть"],
+    triggers: ({ region }) => [
+      "metric:securityIndex",
+      region ? `metric:regions.${region.name}.loyalty` : "metric:loyalty",
+    ],
+    conditions: () => ({
+      metrics: {
+        securityIndex: "<= 35",
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "declare_martial_law",
+        description: "Ввести чрезвычайное положение и перераспределить бюджеты",
+        cost: { influence: 12 },
+        effects: [
+          { type: "loyalty", target: region?.name ?? "", value: -3 },
+          { type: "threat", target: "border", value: -1.8 },
+          { type: "securityPressure", target: "frontier", value: -1.4 },
+          { type: "stability", target: "империя", value: -1 },
+        ],
+        followUps: ["security.border.rebuild"],
+      },
+      {
+        id: "forge_alliance",
+        description: "Запросить военную помощь у союзников и профинансировать совместную операцию",
+        cost: { gold: 140 },
+        effects: [
+          { type: "threat", target: "border", value: -2.2 },
+          { type: "securityPressure", target: "frontier", value: -1.8 },
+          { type: "reputation", target: "союзники", value: 3 },
+          { type: "stability", target: region?.name ?? "", value: 2 },
+        ],
+      },
+      {
+        id: "concede_ground",
+        description: "Отступить к укреплённым линиям и готовиться к затяжной обороне",
+        effects: [
+          { type: "stability", target: region?.name ?? "", value: -2 },
+          { type: "securityPressure", target: "frontier", value: -0.6 },
+        ],
+        followUps: ["security.border.rebellion"],
+      },
+    ],
+    failure: ({ region }) => ({
+      timeout: 1,
+      description:
+        "Граница рухнула, противник угрожает столичным провинциям, армии не хватает дисциплины.",
+      effects: [
+        { type: "threat", target: "border", value: 2.5 },
+        { type: "securityPressure", target: "frontier", value: 1.2 },
+        { type: "stability", target: "империя", value: -3 },
+        ...(region ? [{ type: "loyalty", target: region.name, value: -6 }] : []),
+      ],
+    }),
+    escalation: ({ region }) => [
+      {
+        chance: 0.4,
+        followUp: "security.border.rebellion",
+        description: region
+          ? `Поражение в ${region.name} может спровоцировать восстание и вторжение союзников врага.`
+          : "Если кризис не погасить, начнутся полномасштабные бунты.",
+      },
+    ],
+  },
+  "security.border.rebuild": {
+    id: "security.border.rebuild",
+    category: "Военные угрозы",
+    severity: "minor",
+    title: ({ region }) =>
+      region
+        ? `Пограничные гарнизоны ${region.name} требуют восстановления`
+        : "Командование просит средства на восстановление укреплений",
+    description: ({ region }) =>
+      region
+        ? `После операции гарнизоны ${region.name} нуждаются в финансировании и пополнении.` 
+        : "Военное ведомство формирует план по укреплению оборонительных линий.",
+    factions: () => ["Военное сословие / гарнизоны", "Корона / центральная власть"],
+    triggers: () => ["followup:security.border.crisis"],
+    conditions: () => ({
+      metrics: {
+        securityIndex: "<= 60",
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "fund_recovery",
+        description: "Направить средства и специалистов на модернизацию обороны",
+        cost: { gold: 90, labor: 20 },
+        effects: [
+          { type: "securityPressure", target: "frontier", value: -1.2 },
+          { type: "stability", target: region?.name ?? "", value: 2 },
+          { type: "threat", target: "border", value: -0.8 },
+        ],
+      },
+      {
+        id: "reward_commanders",
+        description: "Повысить боевой дух премиями и наградами",
+        cost: { influence: 6 },
+        effects: [
+          { type: "securityPressure", target: "frontier", value: -0.6 },
+          { type: "reputation", target: "армия", value: 3 },
+        ],
+      },
+    ],
+    failure: () => ({
+      timeout: 2,
+      description: "Без поддержки гарнизоны деградируют, а слухи о поражении деморализуют население.",
+      effects: [
+        { type: "stability", target: "империя", value: -1 },
+        { type: "securityPressure", target: "frontier", value: 0.6 },
+      ],
+    }),
+  },
+  "security.border.rebellion": {
+    id: "security.border.rebellion",
+    category: "Социальные потрясения",
+    severity: "major",
+    title: ({ region }) =>
+      region
+        ? `В ${region.name} вспыхивает мятеж после провала обороны`
+        : "Приграничные гарнизоны бунтуют",
+    description: ({ region }) =>
+      region
+        ? `Оборона ${region.name} рухнула, часть населения поддерживает мятежников.`
+        : "Военные требуют сменить командование и угрожают поддержать заговорщиков.",
+    factions: ({ region }) =>
+      region
+        ? ["Военное сословие / гарнизоны", region.name, "Тайная канцелярия / шпионы"]
+        : ["Военное сословие / гарнизоны", "Тайная канцелярия / шпионы"],
+    triggers: ({ region }) => [
+      "escalation:security.border.crisis",
+      region ? `metric:regions.${region.name}.loyalty` : "metric:loyalty",
+    ],
+    conditions: ({ region }) => ({
+      metrics: {
+        securityIndex: "<= 32",
+        ...(region ? { [`regions.${region.name}.loyalty`]: "<= 55" } : {}),
+      },
+    }),
+    options: ({ region }) => [
+      {
+        id: "crush_rebellion",
+        description: "Подавить мятеж жёсткой рукой и провести чистку командиров",
+        cost: { labor: 40 },
+        effects: [
+          { type: "loyalty", target: region?.name ?? "", value: -4 },
+          { type: "securityPressure", target: "frontier", value: -1.5 },
+          { type: "threat", target: "border", value: -1.2 },
+        ],
+      },
+      {
+        id: "negotiate_amnesty",
+        description: "Обещать реформы и амнистию гарнизонам",
+        cost: { influence: 12 },
+        effects: [
+          { type: "stability", target: region?.name ?? "", value: 2 },
+          { type: "securityPressure", target: "frontier", value: -0.9 },
+          { type: "reputation", target: "армия", value: 2 },
+        ],
+      },
+    ],
+    failure: ({ region }) => ({
+      timeout: 1,
+      description: "Мятеж становится массовым, и соседи готовятся воспользоваться хаосом.",
+      effects: [
+        { type: "securityPressure", target: "frontier", value: 1.5 },
+        { type: "threat", target: "border", value: 2 },
+        { type: "stability", target: "империя", value: -3 },
+        ...(region ? [{ type: "loyalty", target: region.name, value: -8 }] : []),
+      ],
+    }),
+  },
   "treasury.debt_payments": {
     id: "treasury.debt_payments",
     category: "Экономический кризис",

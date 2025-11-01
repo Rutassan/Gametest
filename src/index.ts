@@ -6,6 +6,7 @@ import {
   SimulationEventEffect,
   ThreatLevel,
 } from "./types";
+import { saveSimulationResult } from "./persistence";
 
 function formatEffects(effects: SimulationEventEffect[]): string {
   if (effects.length === 0) {
@@ -59,6 +60,10 @@ function logKPIBlock(report: KPIReport) {
 const config = buildBaselineConfig();
 
 const result = runSimulation(config);
+const saveInfo = saveSimulationResult(result, {
+  config,
+  label: "baseline_cli_run",
+});
 
 console.log("=== Ежеквартальный отчёт ===");
 for (const report of result.reports) {
@@ -180,3 +185,6 @@ for (const region of result.finalState.regions) {
     ` - ${region.name}: богатство ${region.wealth.toFixed(1)}, лояльность ${region.loyalty.toFixed(1)}%, инфраструктура ${region.infrastructure.toFixed(1)}`
   );
 }
+
+console.log(`\nСохранение симуляции: ${saveInfo.directory}`);
+console.log(`Детали сводки: ${saveInfo.summaryPath}`);
