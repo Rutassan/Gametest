@@ -7,7 +7,9 @@ import {
   KPIReport,
   MandateProgressReport,
   MandateStatus,
+  InterventionDecisionMode,
   SimulationEventEffect,
+  SimulationEvent,
   ThreatLevel,
 } from "./types";
 import { saveSimulationResult } from "./persistence";
@@ -23,6 +25,25 @@ function formatEffects(effects: SimulationEventEffect[]): string {
       return `${effect.type} → ${effect.target}: ${valueSign}${effect.value}${duration}`;
     })
     .join("; ");
+}
+
+function describeOption(event: SimulationEvent, optionId: string | null | undefined): string | null {
+  if (!optionId) {
+    return null;
+  }
+  const match = event.options.find((candidate) => candidate.id === optionId);
+  return match?.description ?? null;
+}
+
+function describeResolutionMode(mode: InterventionDecisionMode | undefined): string {
+  switch (mode) {
+    case "player":
+      return "Игрок";
+    case "council":
+      return "Совет";
+    default:
+      return "Авто";
+  }
 }
 
 function formatTrend(trend: number): string {
@@ -178,10 +199,33 @@ for (const report of result.reports) {
         console.log(`   Контекст: ${contextDetails.join(", ")}`);
       }
       console.log(`   Описание: ${event.description}`);
+      if (outcome.resolutionMode) {
+        console.log(`   Режим вмешательства: ${describeResolutionMode(outcome.resolutionMode)}`);
+      }
       if (outcome.selectedOptionId) {
-        const chosen = event.options.find((option) => option.id === outcome.selectedOptionId);
-        if (chosen) {
-          console.log(`   Выбор: ${chosen.description}`);
+        const chosenDescription = describeOption(event, outcome.selectedOptionId);
+        if (chosenDescription) {
+          console.log(`   Выбор: ${chosenDescription}`);
+        }
+      }
+      if (outcome.resolutionMode === "player" && outcome.advisorPreview?.optionId) {
+        const previewDescription = describeOption(event, outcome.advisorPreview.optionId);
+        if (
+          previewDescription &&
+          outcome.advisorPreview.optionId !== outcome.selectedOptionId
+        ) {
+          console.log(`   Совет ожидал: ${previewDescription}`);
+        }
+        if (outcome.advisorPreview.notes) {
+          console.log(`   Комментарий совета: ${outcome.advisorPreview.notes}`);
+        }
+      } else if (outcome.resolutionMode === "council" && outcome.advisorPreview?.optionId) {
+        const previewDescription = describeOption(event, outcome.advisorPreview.optionId);
+        if (previewDescription) {
+          console.log(`   Совет выбрал: ${previewDescription}`);
+        }
+        if (outcome.advisorPreview.notes) {
+          console.log(`   Обоснование: ${outcome.advisorPreview.notes}`);
         }
       }
       if (outcome.appliedEffects.length > 0) {

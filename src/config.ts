@@ -46,6 +46,7 @@ export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): 
     decree,
     initialTrust: overrides.initialTrust,
     eventDecisionStrategy: overrides.eventDecisionStrategy ?? pragmaticDecisionStrategy,
+    eventInterventionHandler: overrides.eventInterventionHandler,
     agenda: baseAgenda,
     council: baseCouncil,
     responsePosture: defaultPosture,

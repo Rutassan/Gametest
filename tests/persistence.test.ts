@@ -40,5 +40,6 @@ describe("Persistence pipeline", () => {
       result.finalState.resources.gold,
       2
     );
+    expect(loaded.result.interventionLog.length).toBe(result.interventionLog.length);
   });
 });

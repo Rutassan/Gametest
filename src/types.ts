@@ -286,6 +286,29 @@ export interface SimulationEvent {
   origin?: EventOrigin;
 }
 
+export interface EventInterventionOptionSummary {
+  id: string;
+  description: string;
+  cost?: SimulationEventCost;
+  effects: SimulationEventEffect[];
+  followUps?: string[];
+}
+
+export interface AdvisorOutcomePreview {
+  optionId: string | null;
+  notes?: string;
+}
+
+export interface EventInterventionPanel {
+  event: SimulationEvent;
+  quarter: number;
+  remainingTime: number;
+  failure: SimulationEventFailure;
+  options: EventInterventionOptionSummary[];
+  advisorPreview: AdvisorOutcomePreview;
+  contextSummary: string[];
+}
+
 export interface EstateSnapshot {
   name: string;
   satisfaction: number;
@@ -338,6 +361,33 @@ export type EventDecisionStrategy = (
   context: EventDecisionContext
 ) => EventResolution;
 
+export type InterventionDecisionMode = "player" | "council";
+
+export interface EventInterventionDecision extends EventResolution {
+  mode: InterventionDecisionMode;
+}
+
+export interface EventInterventionLogEntry {
+  eventId: string;
+  eventTitle: string;
+  quarter: number;
+  mode: InterventionDecisionMode;
+  optionId: string | null;
+  notes?: string;
+  advisorOptionId?: string | null;
+  advisorNotes?: string;
+  remainingTime: number;
+  timestamp: string;
+}
+
+export interface EventInterventionHandler {
+  present: (
+    panel: EventInterventionPanel,
+    context: EventDecisionContext
+  ) => EventInterventionDecision;
+  record?: (entry: EventInterventionLogEntry) => void;
+}
+
 export type EventOutcomeStatus = "resolved" | "failed" | "deferred";
 
 export interface EventOutcome {
@@ -346,6 +396,8 @@ export interface EventOutcome {
   selectedOptionId?: string | null;
   appliedEffects: SimulationEventEffect[];
   notes?: string;
+  resolutionMode?: InterventionDecisionMode;
+  advisorPreview?: AdvisorOutcomePreview;
 }
 
 export interface ActiveEvent {
@@ -385,6 +437,7 @@ export interface SimulationConfig {
   decree: Decree;
   initialTrust?: TrustLevels;
   eventDecisionStrategy?: EventDecisionStrategy;
+  eventInterventionHandler?: EventInterventionHandler;
   agenda: StrategicAgenda;
   council: CouncilMember[];
   responsePosture: ResponsePostureSettings;
@@ -417,4 +470,5 @@ export interface SimulationResult {
     council: CouncilMemberState[];
     plan: StrategicPlanState;
   };
+  interventionLog: EventInterventionLogEntry[];
 }

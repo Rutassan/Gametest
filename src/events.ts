@@ -1,5 +1,9 @@
 import {
+  AdvisorOutcomePreview,
   Estate,
+  EventDecisionContext,
+  EventInterventionOptionSummary,
+  EventInterventionPanel,
   EventOrigin,
   Region,
   SimulationEvent,
@@ -1680,6 +1684,52 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
     }),
   },
 };
+
+function mapOptionToSummary(option: SimulationEventOption): EventInterventionOptionSummary {
+  return {
+    id: option.id,
+    description: option.description,
+    cost: option.cost,
+    effects: option.effects,
+    followUps: option.followUps,
+  };
+}
+
+export function buildEventInterventionPanel(options: {
+  event: SimulationEvent;
+  context: EventDecisionContext;
+  remainingTime: number;
+  quarter: number;
+  advisorPreview: AdvisorOutcomePreview;
+}): EventInterventionPanel {
+  const { event, remainingTime, quarter, advisorPreview, context } = options;
+  const contextSummary: string[] = [];
+
+  if (event.origin?.regionName) {
+    contextSummary.push(`Регион: ${event.origin.regionName}`);
+  }
+  if (event.origin?.estateName) {
+    contextSummary.push(`Сословие: ${event.origin.estateName}`);
+  }
+  if (event.origin?.source) {
+    contextSummary.push(`Источник: ${event.origin.source}`);
+  }
+
+  const treasuryGold = context.resources.gold.toFixed(1);
+  const advisorTrust = (context.trust.advisor * 100).toFixed(1);
+  contextSummary.push(`Казна: ${treasuryGold} золота`);
+  contextSummary.push(`Доверие к советнику: ${advisorTrust}%`);
+
+  return {
+    event,
+    quarter,
+    remainingTime,
+    failure: event.failure,
+    options: event.options.map(mapOptionToSummary),
+    advisorPreview,
+    contextSummary,
+  };
+}
 
 function instantiateEvent(
   templateId: keyof typeof EVENT_TEMPLATES,

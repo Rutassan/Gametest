@@ -1,6 +1,11 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { QuarterlyReport, SimulationConfig, SimulationResult } from "./types";
+import {
+  EventInterventionLogEntry,
+  QuarterlyReport,
+  SimulationConfig,
+  SimulationResult,
+} from "./types";
 
 export interface ConfigSummary {
   quarters: number;
@@ -51,6 +56,7 @@ interface SummaryFile {
   manifest: SimulationSaveManifest;
   reports: QuarterlyReport[];
   finalState: SimulationResult["finalState"];
+  interventions: EventInterventionLogEntry[];
 }
 
 function ensureDirectory(path: string) {
@@ -124,6 +130,7 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
     manifest,
     reports: result.reports,
     finalState: result.finalState,
+    interventions: result.interventionLog,
   };
   writeFileSync(summaryPath, JSON.stringify(summaryPayload, null, 2), "utf-8");
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
@@ -163,6 +170,7 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
       kpiSummary: manifest.kpiSummary,
       totals: manifest.totals,
       finalState: summary.finalState,
+      interventionLog: summary.interventions ?? [],
     },
   };
 }

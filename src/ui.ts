@@ -33,6 +33,45 @@ function generateSparkline(values: number[], color = "#38bdf8"): string {
   `;
 }
 
+function formatOptionCost(cost?: Record<string, number | undefined>): string {
+  if (!cost) {
+    return "";
+  }
+  const entries = Object.entries(cost).filter(([, value]) => value && value !== 0);
+  if (entries.length === 0) {
+    return "";
+  }
+  return entries
+    .map(([resource, value]) => `${resource}: ${Number(value ?? 0).toFixed(0)}`)
+    .join(", ");
+}
+
+function summarizeEffects(
+  effects: { type: string; target: string; value: number; duration?: number }[]
+): string {
+  if (!effects || effects.length === 0) {
+    return "";
+  }
+  return effects
+    .map((effect) => {
+      const sign = effect.value > 0 ? "+" : "";
+      const duration = effect.duration ? ` (на ${effect.duration} хода)` : "";
+      return `${effect.type} → ${effect.target}: ${sign}${effect.value}${duration}`;
+    })
+    .join(" • ");
+}
+
+function describeOption(
+  event: { options: { id: string; description: string }[] },
+  optionId: string | null | undefined
+): string | null {
+  if (!optionId) {
+    return null;
+  }
+  const match = event.options.find((candidate) => candidate.id === optionId);
+  return match?.description ?? null;
+}
+
 const config = buildBaselineConfig();
 const result = runSimulation(config);
 const summary = result.kpiSummary;
@@ -74,20 +113,76 @@ const eventsBlock = reports
           .filter(Boolean)
           .join(" • ");
 
-        const effects = entry.appliedEffects
-          .map((effect) => `${effect.type} → ${effect.target}: ${effect.value}`)
-          .join("; ");
+        const effects = summarizeEffects(entry.appliedEffects);
+        const selectedDescription = describeOption(entry.event, entry.selectedOptionId ?? undefined);
+        const modeBadge = entry.resolutionMode
+          ? `<span class="pill pill-mode-${entry.resolutionMode}">${
+              entry.resolutionMode === "player" ? "Игрок решает" : "Советник решает"
+            }</span>`
+          : "";
+
+        const optionCards = entry.event.options
+          .map((option) => {
+            const costText = formatOptionCost(option.cost);
+            const optionEffects = summarizeEffects(option.effects);
+            const isSelected = entry.selectedOptionId === option.id;
+            const isAdvisor = entry.advisorPreview?.optionId === option.id;
+            return `
+              <li class="option-card${isSelected ? " selected" : ""}${
+                isAdvisor ? " advisor" : ""
+              }">
+                <span class="option-title">${option.description}</span>
+                ${costText ? `<span class="option-detail">Стоимость: ${costText}</span>` : ""}
+                ${optionEffects ? `<span class="option-detail">Эффекты: ${optionEffects}</span>` : ""}
+              </li>
+            `;
+          })
+          .join("");
+
+        const advisorDescription = describeOption(entry.event, entry.advisorPreview?.optionId ?? undefined);
+        let advisorLine = "";
+        if (entry.advisorPreview?.optionId) {
+          const previewNotes = entry.advisorPreview.notes ? ` (${entry.advisorPreview.notes})` : "";
+          advisorLine = `Совет прогнозировал: ${advisorDescription ?? entry.advisorPreview.optionId}${previewNotes}`;
+        }
+
+        const footerParts: string[] = [];
+        if (entry.selectedOptionId) {
+          footerParts.push(
+            `<div class="chosen">Выбрано: ${selectedDescription ?? entry.selectedOptionId}</div>`
+          );
+        } else {
+          footerParts.push(`<div class="chosen">Решение отложено</div>`);
+        }
+        if (advisorLine) {
+          footerParts.push(`<div class="advisor-preview">${advisorLine}</div>`);
+        }
+        if (entry.notes) {
+          footerParts.push(`<div class="note">Заметка: ${entry.notes}</div>`);
+        }
+        const panelFooter = footerParts.length ? `<div class="panel-footer">${footerParts.join("")}</div>` : "";
 
         return `
           <li class="event-entry">
             <header>
               <span class="pill pill-${entry.status}">${entry.status}</span>
+              ${modeBadge}
               <strong>${entry.event.title}</strong>
             </header>
             <div class="meta">${entry.event.category} • ${entry.event.severity}</div>
             ${context ? `<div class="context">${context}</div>` : ""}
             <p>${entry.event.description}</p>
-            ${entry.selectedOptionId ? `<div class="option">Выбор: ${entry.selectedOptionId}</div>` : ""}
+            <div class="intervention-panel">
+              <div class="panel-header">
+                <span>Срок реакции: ${entry.event.failure.timeout} хода</span>
+                <div class="panel-actions">
+                  <button class="${entry.resolutionMode === "player" ? "active" : ""}">Игрок решает</button>
+                  <button class="${entry.resolutionMode === "council" ? "active" : ""}">Советник решает</button>
+                </div>
+              </div>
+              <ul class="option-list">${optionCards}</ul>
+              ${panelFooter}
+            </div>
             ${effects ? `<div class="effects">Эффекты: ${effects}</div>` : ""}
           </li>
         `;
@@ -106,6 +201,60 @@ const eventsBlock = reports
     `;
   })
   .join("");
+
+const eventOptionLookup = new Map<string, { options: { id: string; description: string }[] }>();
+for (const report of reports) {
+  for (const outcome of report.events) {
+    if (!eventOptionLookup.has(outcome.event.id)) {
+      eventOptionLookup.set(outcome.event.id, {
+        options: outcome.event.options.map((option) => ({ id: option.id, description: option.description })),
+      });
+    }
+  }
+}
+
+const interventionTimeline = result.interventionLog
+  .map((logEntry) => {
+    const lookup = eventOptionLookup.get(logEntry.eventId) ?? { options: [] };
+    const decisionDescription = logEntry.optionId
+      ? describeOption(lookup, logEntry.optionId) ?? logEntry.optionId
+      : "Решение отложено";
+    const advisorDescription = logEntry.advisorOptionId
+      ? describeOption(lookup, logEntry.advisorOptionId) ?? logEntry.advisorOptionId
+      : "";
+    const details: string[] = [`Выбор: ${decisionDescription}`];
+    details.push(`Оставалось ходов: ${logEntry.remainingTime}`);
+    if (advisorDescription && advisorDescription !== decisionDescription) {
+      details.push(`Прогноз совета: ${advisorDescription}`);
+    }
+    if (logEntry.notes) {
+      details.push(`Заметка: ${logEntry.notes}`);
+    }
+
+    const detailMarkup = details.map((line) => `<div>${line}</div>`).join("");
+    const modeLabel = logEntry.mode === "player" ? "Игрок" : "Совет";
+
+    return `
+      <li>
+        <div class="log-header">
+          <span class="pill pill-mode-${logEntry.mode}">${modeLabel}</span>
+          <span class="log-quarter">Q${logEntry.quarter}</span>
+          <span class="log-title">${logEntry.eventTitle}</span>
+        </div>
+        <div class="log-body">${detailMarkup}</div>
+      </li>
+    `;
+  })
+  .join("");
+
+const interventionSection = interventionTimeline
+  ? `
+      <section class="intervention-log">
+        <h2>Журнал вмешательств</h2>
+        <ul>${interventionTimeline}</ul>
+      </section>
+    `
+  : "";
 
 const estateTrustRows = Object.entries(result.finalState.trust.estates)
   .map(([name, value]) => `<li>${name}: ${(value * 100).toFixed(1)}%</li>`)
@@ -276,6 +425,139 @@ const html = `<!DOCTYPE html>
         border: 1px solid rgba(59, 130, 246, 0.6);
         color: #60a5fa;
       }
+      .pill-mode-player {
+        background: rgba(45, 212, 191, 0.2);
+        border: 1px solid rgba(45, 212, 191, 0.6);
+        color: #5eead4;
+      }
+      .pill-mode-council {
+        background: rgba(249, 115, 22, 0.2);
+        border: 1px solid rgba(249, 115, 22, 0.6);
+        color: #fb923c;
+      }
+      .intervention-panel {
+        margin-top: 12px;
+        border: 1px solid rgba(148, 163, 184, 0.25);
+        border-radius: 12px;
+        padding: 12px;
+        background: rgba(15, 23, 42, 0.6);
+      }
+      .intervention-panel .panel-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-size: 13px;
+        color: #94a3b8;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .intervention-panel .panel-actions {
+        display: flex;
+        gap: 8px;
+      }
+      .intervention-panel .panel-actions button {
+        background: rgba(30, 41, 59, 0.8);
+        border: 1px solid rgba(148, 163, 184, 0.4);
+        border-radius: 6px;
+        color: #e2e8f0;
+        padding: 6px 10px;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .intervention-panel .panel-actions button.active {
+        border-color: rgba(250, 204, 21, 0.8);
+        color: #facc15;
+        box-shadow: 0 0 12px rgba(250, 204, 21, 0.25);
+      }
+      .intervention-panel .option-list {
+        list-style: none;
+        margin: 12px 0 0;
+        padding: 0;
+        display: grid;
+        gap: 10px;
+      }
+      .intervention-panel .option-card {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: rgba(30, 41, 59, 0.6);
+      }
+      .intervention-panel .option-card.selected {
+        border-color: rgba(34, 197, 94, 0.6);
+        box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.3);
+      }
+      .intervention-panel .option-card.advisor:not(.selected) {
+        border-style: dashed;
+        border-color: rgba(249, 115, 22, 0.5);
+      }
+      .intervention-panel .option-title {
+        font-weight: 600;
+        color: #f1f5f9;
+        display: block;
+        margin-bottom: 4px;
+      }
+      .intervention-panel .option-detail {
+        display: block;
+        font-size: 12px;
+        color: #94a3b8;
+        margin-top: 2px;
+      }
+      .intervention-panel .panel-footer {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        font-size: 13px;
+        color: #cbd5f5;
+      }
+      .intervention-panel .panel-footer .chosen {
+        color: #facc15;
+        font-weight: 600;
+      }
+      .intervention-panel .panel-footer .advisor-preview {
+        color: #38bdf8;
+      }
+      .intervention-panel .panel-footer .note {
+        color: #f8fafc;
+      }
+      .intervention-log ul {
+        list-style: none;
+        margin: 0;
+        padding: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+      .intervention-log li {
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        border-radius: 12px;
+        padding: 12px 14px;
+        background: rgba(15, 23, 42, 0.65);
+      }
+      .intervention-log .log-header {
+        display: flex;
+        gap: 12px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 8px;
+      }
+      .intervention-log .log-quarter {
+        font-size: 12px;
+        color: #94a3b8;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+      .intervention-log .log-title {
+        font-weight: 600;
+        color: #e2e8f0;
+        font-size: 15px;
+      }
+      .intervention-log .log-body div {
+        font-size: 13px;
+        color: #cbd5f5;
+        margin-top: 4px;
+      }
       .regions-grid {
         margin-top: 32px;
         display: grid;
@@ -357,6 +639,8 @@ const html = `<!DOCTYPE html>
         ${eventsBlock || "<p>Кризисов не обнаружено.</p>"}
       </section>
 
+      ${interventionSection}
+
       <section>
         <h2>Динамика регионов</h2>
         <div class="regions-grid">
@@ -382,6 +666,7 @@ const graphqlPayload = {
       totals: result.totals,
       finalState: result.finalState,
       reports: result.reports,
+      interventionLog: result.interventionLog,
     },
   },
 };
