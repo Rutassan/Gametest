@@ -7,7 +7,7 @@ import {
   Estate,
   KPIEntry,
   KPIReport,
-  MonthlyReport,
+  QuarterlyReport,
   QuarterlyExpenses,
   Region,
   ResourcePool,
@@ -307,7 +307,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   const estates: Estate[] = config.estates.map((estate) => ({ ...estate }));
   const departments: DepartmentState[] = config.departments.map((department) => ({ ...department }));
 
-  const reports: MonthlyReport[] = [];
+  const reports: QuarterlyReport[] = [];
   let totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
   let totalExpenses: QuarterlyExpenses = {
     departments: Object.fromEntries(DEPARTMENTS.map((department) => [department, 0])) as Record<Department, number>,
@@ -320,7 +320,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   let previousSecurity: number | null = null;
   let previousCrises: number | null = null;
 
-  for (let month = 1; month <= config.quarters; month += 1) {
+  for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
     const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
     const loyaltyModifier = taxLoyaltyModifier(config.decree.taxPolicy);
     const economyEfficiency = departments.find((d) => d.name === "economy")?.efficiency ?? 1;
@@ -443,7 +443,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     previousCrises = kpis.activeCrises.value;
 
     reports.push({
-      month,
+      quarter,
       incomes: {
         gold: Number(incomes.gold.toFixed(2)),
         influence: Number(incomes.influence.toFixed(2)),

@@ -170,8 +170,8 @@ export interface KPIReport {
   activeCrises: KPIEntry;
 }
 
-export interface MonthlyReport {
-  month: number;
+export interface QuarterlyReport {
+  quarter: number;
   incomes: ResourcePool;
   expenses: QuarterlyExpenses;
   treasury: ResourcePool;
@@ -203,7 +203,7 @@ export interface KPIAverages {
 }
 
 export interface SimulationResult {
-  reports: MonthlyReport[];
+  reports: QuarterlyReport[];
   kpiSummary: {
     latest: KPIReport | null;
     averages: KPIAverages;
