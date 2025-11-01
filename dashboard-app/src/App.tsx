@@ -12,12 +12,14 @@ import type {
   KPIReport,
   QuarterlyReport,
   SimulationData,
+  LiveCampaignPayload,
   ThreatLevel,
 } from "./types";
 
 type SeverityFilter = "all" | EventSeverity;
 
 const DATA_URL = import.meta.env.VITE_DATA_URL ?? "../data.json";
+const LIVE_DATA_URL = import.meta.env.VITE_LIVE_DATA_URL ?? "../live.json";
 
 const severityLabels: Record<SeverityFilter, string> = {
   all: "Все уровни",
@@ -134,6 +136,168 @@ function formatDate(iso: string): string {
   }).format(date);
 }
 
+function LiveCampaignView({
+  data,
+  error,
+  onRefresh,
+}: {
+  data: LiveCampaignPayload | null;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  if (error) {
+    return (
+      <div className="live-view">
+        <div className="error">
+          <strong>{error}</strong>
+          <button onClick={onRefresh}>Попробовать снова</button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) {
+    return (
+      <div className="live-view">
+        <div className="empty-state">
+          Данные живой кампании пока не получены. Запустите интерактивный режим `npm run play` и выполните автосохранение.
+        </div>
+      </div>
+    );
+  }
+
+  const lastReport = data.lastReport ?? null;
+  const priorities = Object.entries(
+    data.plan.priorities ?? {}
+  ) as Array<[string, "neglect" | "steady" | "push"]>;
+
+  return (
+    <div className="live-view">
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Активные кризисы</h2>
+          <button onClick={onRefresh}>Обновить</button>
+        </div>
+        {data.activeEvents.length === 0 ? (
+          <div className="empty-state">Кризисов не обнаружено.</div>
+        ) : (
+          <div className="live-events">
+            {data.activeEvents.map((entry) => (
+              <article key={`${entry.event.id}-${entry.originQuarter}`} className="live-event-card">
+                <header>
+                  <h3>{entry.event.title}</h3>
+                  <span className="event-pill">{entry.event.severity}</span>
+                </header>
+                <div className="live-event-meta">
+                  <span>{entry.event.category}</span>
+                  <span>Осталось ходов: {entry.remainingTime}</span>
+                  {entry.event.origin?.regionName ? <span>Регион: {entry.event.origin.regionName}</span> : null}
+                  {entry.event.origin?.estateName ? <span>Сословие: {entry.event.origin.estateName}</span> : null}
+                </div>
+                <p>{entry.event.description}</p>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Последний квартал</h2>
+          {lastReport ? <span className="badge">Q{lastReport.quarter}</span> : null}
+        </div>
+        {lastReport ? (
+          <div className="live-report">
+            <div className="live-report-metrics">
+              <article>
+                <h4>KPI</h4>
+                <ul>
+                  <li>
+                    Стабильность: {lastReport.kpis.stability.value.toFixed(1)} ({describeTrend(lastReport.kpis.stability).text})
+                  </li>
+                  <li>
+                    Экономический рост: {lastReport.kpis.economicGrowth.value.toFixed(1)} ({describeTrend(lastReport.kpis.economicGrowth).text})
+                  </li>
+                  <li>
+                    Безопасность: {lastReport.kpis.securityIndex.value.toFixed(1)} ({describeTrend(lastReport.kpis.securityIndex).text})
+                  </li>
+                </ul>
+              </article>
+              <article>
+                <h4>Финансы</h4>
+                <ul>
+                  <li>Доходы: {formatNumber(lastReport.incomes.gold, 1)} зол.</li>
+                  <li>Казна: {formatNumber(lastReport.treasury.gold, 1)} зол.</li>
+                  <li>Уровень угроз: {lastReport.activeThreatLevel.toFixed(2)}</li>
+                </ul>
+              </article>
+            </div>
+            <div className="live-report-events">
+              <h4>Решённые события</h4>
+              {lastReport.events.length === 0 ? (
+                <div className="empty-state">События не обрабатывались.</div>
+              ) : (
+                <ul>
+                  {lastReport.events.slice(0, 4).map((event, index) => (
+                    <li key={`${event.event.id}-${index}`}>
+                      <strong>{event.event.title}</strong> — {event.status}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="empty-state">Квартальных отчётов пока нет.</div>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Совет и повестка</h2>
+        </div>
+        {data.council.length === 0 ? (
+          <div className="empty-state">Нет данных о членах совета.</div>
+        ) : (
+          <div className="council-grid">
+            {data.council.map((member) => (
+              <article key={member.id} className="council-card">
+                <h4>{member.name}</h4>
+                <span className="council-role">{member.portfolio}</span>
+                <div className="council-metric">
+                  <span>Мотивация</span>
+                  <span>{formatPercent(member.motivation * 100)}</span>
+                </div>
+                <div className="council-metric">
+                  <span>Стресс</span>
+                  <span>{formatPercent(member.stress * 100)}</span>
+                </div>
+                {member.lastQuarterSummary ? (
+                  <p className="council-note">{member.lastQuarterSummary}</p>
+                ) : null}
+              </article>
+            ))}
+          </div>
+        )}
+
+        {priorities.length > 0 ? (
+          <div className="plan-priorities">
+            <h4>Приоритеты</h4>
+            <ul>
+              {priorities.map(([department, priority]) => (
+                <li key={department}>
+                  <span>{departmentLabel(department)}</span>
+                  <span className={`priority-pill ${priority}`}>{priorityMeta[priority].label}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+      </section>
+    </div>
+  );
+}
+
 function formatNumber(value: number, fraction = 1): string {
   return value.toFixed(fraction);
 }
@@ -246,6 +410,9 @@ function useSimulationData() {
 
 export default function App() {
   const { data: simulation, loading, error, reload, setData } = useSimulationData();
+  const [liveData, setLiveData] = useState<LiveCampaignPayload | null>(null);
+  const [liveError, setLiveError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"summary" | "live">("summary");
   const [selectedQuarter, setSelectedQuarter] = useState<number | null>(null);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
@@ -257,6 +424,32 @@ export default function App() {
       setSelectedQuarter(latestQuarter);
     }
   }, [simulation]);
+
+  const refreshLiveData = useCallback(() => {
+    fetch(LIVE_DATA_URL, { cache: "no-store" })
+      .then(async (response) => {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}`);
+        }
+        return (await response.json()) as LiveCampaignPayload;
+      })
+      .then((payload) => {
+        setLiveData(payload);
+        setLiveError(null);
+      })
+      .catch(() => {
+        setLiveData(null);
+        setLiveError("Live данные недоступны. Запустите интерактивный режим и автосохранение.");
+      });
+  }, []);
+
+  useEffect(() => {
+    refreshLiveData();
+    const intervalId = window.setInterval(refreshLiveData, 10000);
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [refreshLiveData]);
 
   const reportForQuarter = useMemo<QuarterlyReport | null>(() => {
     if (!simulation || selectedQuarter === null) {
@@ -503,61 +696,125 @@ export default function App() {
   const estates = reportForQuarter?.estates ?? [];
   const regions = reportForQuarter?.regions ?? [];
 
+  const liveSession = liveData?.session ?? null;
+  const liveControlInfo = liveSession ? controlModeLabels[liveSession.controlMode] : null;
+
   return (
     <div className="app">
       <header className="app-header">
-        <div>
-          <h1 className="app-title">Имперский дашборд</h1>
-          <div className="app-meta">
-            <span>Сохранение: {simulation.label ?? simulation.id}</span>
-            <span>Создано: {formatDate(simulation.createdAt)}</span>
-            <span>Отчётов: {simulation.reports.length}</span>
-            <span>Советник: {simulation.config?.advisor ?? "не задан"}</span>
+        <div className="header-bar">
+          <div>
+            <h1 className="app-title">Имперский дашборд</h1>
+            <div className="app-meta">
+              <span>Сохранение: {simulation.label ?? simulation.id}</span>
+              <span>Создано: {formatDate(simulation.createdAt)}</span>
+              <span>Отчётов: {simulation.reports.length}</span>
+              <span>Советник: {simulation.config?.advisor ?? "не задан"}</span>
+            </div>
+          </div>
+          <div className="tab-toggle">
+            <button
+              type="button"
+              className={activeTab === "summary" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("summary")}
+            >
+              Отчёт
+            </button>
+            <button
+              type="button"
+              className={activeTab === "live" ? "tab active" : "tab"}
+              onClick={() => setActiveTab("live")}
+            >
+              Живая кампания
+            </button>
           </div>
         </div>
-        <div className="summary-grid">
-          <article className="metric-card">
-            <h3>Казна</h3>
-            <span className="value">{formatNumber(finalState.resources.gold, 1)} зол.</span>
-            <span className="subtitle">
-              Влияние: {formatNumber(finalState.resources.influence, 1)} • Раб. сила:{" "}
-              {formatNumber(finalState.resources.labor, 1)}
-            </span>
-          </article>
-          <article className="metric-card">
-            <h3>Доверие советника</h3>
-            <span className="value">{formatPercent(finalState.trust.advisor * 100)}</span>
-            <span className="subtitle">
-              Сословия:{" "}
-              {estateTrustEntries
-                .map(([name, trust]) => `${name}: ${formatPercent(trust * 100)}`)
-                .join(" • ")}
-            </span>
-          </article>
-          <article className="metric-card">
-            <h3>Угроза</h3>
-            <span className="value">{finalState.activeThreatLevel.toFixed(2)}</span>
-            <span className="subtitle">
-              {simulation.kpiSummary.latest?.securityIndex
-                ? threatText[simulation.kpiSummary.latest.securityIndex.threatLevel]
-                : "Нет оценки"}
-            </span>
-          </article>
-          <article className="metric-card">
-            <h3>Средние KPI</h3>
-            <span className="value">{averages.stability.toFixed(1)} стабильность</span>
-            <span className="subtitle">
-              Рост {averages.economicGrowth.toFixed(1)} • Безопасность {averages.securityIndex.toFixed(1)}
-            </span>
-          </article>
-          <article className="metric-card control-mode-card">
-            <h3>Режим кампании</h3>
-            <span className={`value ${controlInfo.badgeClass}`}>{controlInfo.label}</span>
-            <span className="subtitle">{controlInfo.description}</span>
-          </article>
-        </div>
+        {activeTab === "summary" ? (
+          <div className="summary-grid">
+            <article className="metric-card">
+              <h3>Казна</h3>
+              <span className="value">{formatNumber(finalState.resources.gold, 1)} зол.</span>
+              <span className="subtitle">
+                Влияние: {formatNumber(finalState.resources.influence, 1)} • Раб. сила:{" "}
+                {formatNumber(finalState.resources.labor, 1)}
+              </span>
+            </article>
+            <article className="metric-card">
+              <h3>Доверие советника</h3>
+              <span className="value">{formatPercent(finalState.trust.advisor * 100)}</span>
+              <span className="subtitle">
+                Сословия:{" "}
+                {estateTrustEntries
+                  .map(([name, trust]) => `${name}: ${formatPercent(trust * 100)}`)
+                  .join(" • ")}
+              </span>
+            </article>
+            <article className="metric-card">
+              <h3>Угроза</h3>
+              <span className="value">{finalState.activeThreatLevel.toFixed(2)}</span>
+              <span className="subtitle">
+                {simulation.kpiSummary.latest?.securityIndex
+                  ? threatText[simulation.kpiSummary.latest.securityIndex.threatLevel]
+                  : "Нет оценки"}
+              </span>
+            </article>
+            <article className="metric-card">
+              <h3>Средние KPI</h3>
+              <span className="value">{averages.stability.toFixed(1)} стабильность</span>
+              <span className="subtitle">
+                Рост {averages.economicGrowth.toFixed(1)} • Безопасность {averages.securityIndex.toFixed(1)}
+              </span>
+            </article>
+            <article className="metric-card control-mode-card">
+              <h3>Режим кампании</h3>
+              <span className={`value ${controlInfo.badgeClass}`}>{controlInfo.label}</span>
+              <span className="subtitle">{controlInfo.description}</span>
+            </article>
+          </div>
+        ) : liveSession ? (
+          <div className="summary-grid live-summary-grid">
+            <article className="metric-card">
+              <h3>Квартал</h3>
+              <span className="value">
+                Q{liveSession.currentQuarter} / {liveSession.totalQuarters > 0 ? liveSession.totalQuarters : "∞"}
+              </span>
+              <span className="subtitle">
+                Средняя стабильность: {liveSession.averages.stability.toFixed(1)}
+              </span>
+            </article>
+            <article className="metric-card">
+              <h3>Казна</h3>
+              <span className="value">{formatNumber(liveSession.resources.gold, 1)} зол.</span>
+              <span className="subtitle">
+                Влияние: {formatNumber(liveSession.resources.influence, 1)} • Раб. сила:{" "}
+                {formatNumber(liveSession.resources.labor, 1)}
+              </span>
+            </article>
+            <article className="metric-card">
+              <h3>Доверие советника</h3>
+              <span className="value">{formatPercent(liveSession.trust.advisor * 100)}</span>
+              <span className="subtitle">Активных кризисов: {liveData?.activeEvents.length ?? 0}</span>
+            </article>
+            <article className="metric-card control-mode-card">
+              <h3>Режим кампании</h3>
+              <span className={`value ${liveControlInfo?.badgeClass ?? ""}`}>{liveControlInfo?.label ?? "?"}</span>
+              <span className="subtitle">{liveControlInfo?.description ?? "Нет данных"}</span>
+            </article>
+            <article className="metric-card">
+              <h3>Уровень угроз</h3>
+              <span className="value">{liveSession.modifiers.threat.toFixed(2)}</span>
+              <span className="subtitle">Бюджетный модификатор: {liveSession.modifiers.budget.toFixed(2)}</span>
+            </article>
+          </div>
+        ) : (
+          <div className="live-placeholder">
+            {liveError ?? "Live данные пока не загружены. Запустите интерактивную сессию."}
+          </div>
+        )}
       </header>
 
+      {activeTab === "summary" ? (
+        <>
       <section className="section">
         <div className="section-header">
           <h2 className="section-title">Ключевые показатели</h2>
@@ -1075,6 +1332,10 @@ export default function App() {
           </div>
         )}
       </section>
+        </>
+      ) : (
+        <LiveCampaignView data={liveData} error={liveError} onRefresh={refreshLiveData} />
+      )}
     </div>
   );
 }

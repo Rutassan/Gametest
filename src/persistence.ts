@@ -8,6 +8,7 @@ import {
   QuarterlyReport,
   SimulationConfig,
   SimulationResult,
+  SimulationSessionState,
 } from "./types";
 
 export interface ConfigSummary {
@@ -30,9 +31,15 @@ export interface SimulationSaveManifest {
   createdAt: string;
   label?: string;
   quarters: number;
+  status?: "completed" | "in_progress";
   files: {
     summary: string;
     timeline: string;
+  };
+  session?: {
+    file: string;
+    currentQuarter: number;
+    totalQuarters: number;
   };
   config?: ConfigSummary;
   finalSnapshot: {
@@ -51,6 +58,8 @@ export interface SaveOptions {
   id?: string;
   label?: string;
   config?: SimulationConfig;
+  status?: "completed" | "in_progress";
+  sessionState?: SimulationSessionState;
 }
 
 export interface SaveResult {
@@ -59,6 +68,7 @@ export interface SaveResult {
   summaryPath: string;
   timelinePath: string;
   manifest: SimulationSaveManifest;
+  sessionStatePath?: string;
 }
 
 interface SummaryFile {
@@ -67,6 +77,7 @@ interface SummaryFile {
   finalState: SimulationResult["finalState"];
   interventions: EventInterventionLogEntry[];
   controlState: CampaignControlState;
+  sessionState?: SimulationSessionState;
 }
 
 function ensureDirectory(path: string) {
@@ -121,6 +132,7 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
     createdAt: new Date().toISOString(),
     label: options.label,
     quarters: result.reports.length,
+    status: options.status ?? (options.sessionState ? "in_progress" : "completed"),
     files: {
       summary: "summary.json",
       timeline: "timeline.ndjson",
@@ -140,6 +152,17 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
   const timelinePath = join(saveDirectory, manifest.files.timeline);
   const summaryPath = join(saveDirectory, manifest.files.summary);
   const manifestPath = join(saveDirectory, "manifest.json");
+  let sessionStatePath: string | undefined;
+
+  if (options.sessionState) {
+    manifest.session = {
+      file: "session.json",
+      currentQuarter: options.sessionState.currentQuarter,
+      totalQuarters: options.sessionState.totalQuarters,
+    };
+    sessionStatePath = join(saveDirectory, manifest.session.file);
+    writeFileSync(sessionStatePath, JSON.stringify(options.sessionState, null, 2), "utf-8");
+  }
 
   const timelinePayload = result.reports.map((report) => JSON.stringify(report)).join("\n");
   writeFileSync(timelinePath, timelinePayload, "utf-8");
@@ -150,6 +173,7 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
     finalState: result.finalState,
     interventions: result.interventionLog,
     controlState: result.controlState,
+    sessionState: options.sessionState,
   };
   writeFileSync(summaryPath, JSON.stringify(summaryPayload, null, 2), "utf-8");
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
@@ -160,12 +184,14 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
     summaryPath,
     timelinePath,
     manifest,
+    sessionStatePath,
   };
 }
 
 export interface LoadedSimulationSave {
   manifest: SimulationSaveManifest;
   result: SimulationResult;
+  sessionState?: SimulationSessionState;
 }
 
 export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
@@ -204,6 +230,14 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
   const historyFallback =
     summary.controlState?.history ?? manifest.controlState?.history ?? [];
 
+  const sessionState: SimulationSessionState | undefined = summary.sessionState
+    ? summary.sessionState
+    : manifest.session
+    ? (JSON.parse(
+        readFileSync(join(directory, manifest.session.file), "utf-8")
+      ) as SimulationSessionState)
+    : undefined;
+
   return {
     manifest,
     result: {
@@ -222,5 +256,6 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
           history: historyFallback,
         },
     },
+    sessionState,
   };
 }

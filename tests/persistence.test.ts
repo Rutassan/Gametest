@@ -13,9 +13,9 @@ afterAll(() => {
 });
 
 describe("Persistence pipeline", () => {
-  it("сохраняет и загружает отчёт симуляции", () => {
+  it("сохраняет и загружает отчёт симуляции", async () => {
     const config = buildBaselineConfig({ quarters: 2 });
-    const result = runSimulation(config);
+    const result = await runSimulation(config);
 
     const save = saveSimulationResult(result, {
       baseDir: tempRoot,

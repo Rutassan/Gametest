@@ -30,7 +30,7 @@ class NeglectfulAdvisor implements Advisor {
 }
 
 describe("Система эскалации угроз безопасности", () => {
-  it("порождает цепочку событий при хронически низком индексе безопасности", () => {
+  it("порождает цепочку событий при хронически низком индексе безопасности", async () => {
     const advisor = new NeglectfulAdvisor();
     const config = buildBaselineConfig({
       quarters: 6,
@@ -38,7 +38,7 @@ describe("Система эскалации угроз безопасности"
       baseQuarterBudget: 480,
     });
 
-    const result = runSimulation(config);
+    const result = await runSimulation(config);
     const uniqueEventIds = new Set(
       result.reports.flatMap((report) => report.events.map((entry) => entry.event.id))
     );

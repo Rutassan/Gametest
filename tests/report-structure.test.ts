@@ -3,9 +3,9 @@ import { buildBaselineConfig } from "../src/config";
 import { runSimulation } from "../src/simulation";
 
 describe("Quarterly report enrichment", () => {
-  it("включает ведомства, проекты и оценки рисков", () => {
+  it("включает ведомства, проекты и оценки рисков", async () => {
     const config = buildBaselineConfig({ quarters: 1 });
-    const result = runSimulation(config);
+    const result = await runSimulation(config);
 
     expect(result.reports.length).toBeGreaterThan(0);
     const report = result.reports[0]!;

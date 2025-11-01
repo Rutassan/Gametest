@@ -463,8 +463,69 @@ export interface EventInterventionHandler {
   present: (
     panel: EventInterventionPanel,
     context: EventDecisionContext
-  ) => EventInterventionDecision;
+  ) => EventInterventionDecision | Promise<EventInterventionDecision>;
   record?: (entry: EventInterventionLogEntry) => void;
+}
+
+export interface SimulationSessionSnapshot {
+  quarter: number;
+  totalQuarters: number;
+  resources: ResourcePool;
+  trust: TrustLevels;
+  modifiers: {
+    stability: number;
+    threat: number;
+    budget: number;
+    securityPressure: number;
+  };
+  activeEvents: ActiveEvent[];
+  interventionLog: EventInterventionLogEntry[];
+  controlState: CampaignControlState;
+  plan: StrategicPlanState;
+  council: CouncilMemberState[];
+}
+
+export interface SerializedTimedEffect {
+  effect: SimulationEventEffect;
+  remaining: number;
+  source: string;
+}
+
+export interface SimulationSessionState {
+  currentQuarter: number;
+  totalQuarters: number;
+  resources: ResourcePool;
+  regions: Region[];
+  estates: Estate[];
+  departments: DepartmentState[];
+  trust: TrustLevels;
+  modifiers: {
+    stability: number;
+    threat: number;
+    budget: number;
+    securityPressure: number;
+    securityEscalationStage: number;
+    securityRecovery: number;
+    reputation: Record<string, number>;
+  };
+  timedEffects: SerializedTimedEffect[];
+  activeEvents: ActiveEvent[];
+  plan: StrategicPlanState;
+  council: CouncilMemberState[];
+  reports: QuarterlyReport[];
+  totalIncomes: ResourcePool;
+  totalExpenses: QuarterlyExpenses;
+  interventionLog: EventInterventionLogEntry[];
+  previousTotals: {
+    wealth: number;
+    stability: number | null;
+    growth: number | null;
+    security: number | null;
+    crises: number | null;
+  };
+  latestKPI: KPIReport | null;
+  controlState: CampaignControlState;
+  pendingTransitions: ControlModeTransition[];
 }
 
 export type EventOutcomeStatus = "resolved" | "failed" | "deferred";

@@ -30,14 +30,14 @@ class ScriptedInterventionHandler implements EventInterventionHandler {
 }
 
 describe("Event intervention flow", () => {
-  it("фиксирует ручные решения и прогноз совета", () => {
+  it("фиксирует ручные решения и прогноз совета", async () => {
     const handler = new ScriptedInterventionHandler();
     const config = buildBaselineConfig({
       quarters: 1,
       eventInterventionHandler: handler,
     });
 
-    const result = runSimulation(config);
+    const result = await runSimulation(config);
 
     const manualEntry = result.interventionLog.find((entry) => entry.mode === "player");
     expect(manualEntry).toBeDefined();

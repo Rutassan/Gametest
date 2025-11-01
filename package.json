@@ -6,6 +6,7 @@
   "scripts": {
     "build": "tsc",
     "simulate": "ts-node src/index.ts",
+    "play": "npx ts-node src/play.ts",
     "dashboard": "ts-node src/ui.ts",
     "dashboard:prepare": "npm run dashboard && node scripts/sync-dashboard-data.js",
     "dashboard:dev": "npm run dashboard:prepare && vite --config dashboard-app/vite.config.mts",

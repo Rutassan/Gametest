@@ -45,6 +45,8 @@ import {
   SimulationEventOption,
   SimulationEventEffect,
   SimulationResult,
+  SimulationSessionSnapshot,
+  SimulationSessionState,
   StrategicAgenda,
   StrategicPriorityLevel,
   StrategicPlanState,
@@ -1074,7 +1076,7 @@ function enqueueEvents(
   }
 }
 
-function resolveEventsForQuarter(
+async function resolveEventsForQuarter(
   quarter: number,
   activeEvents: ActiveEvent[],
   newEvents: SimulationEvent[],
@@ -1089,7 +1091,7 @@ function resolveEventsForQuarter(
   postureSettings: ResponsePostureSettings,
   interventionHandler: EventInterventionHandler | undefined,
   interventionLog: EventInterventionLogEntry[] | undefined
-): EventOutcome[] {
+): Promise<EventOutcome[]> {
   const outcomes: EventOutcome[] = [];
   enqueueEvents(activeEvents, newEvents, quarter);
 
@@ -1116,7 +1118,7 @@ function resolveEventsForQuarter(
         advisorPreview,
       });
 
-      const decision: EventInterventionDecision = interventionHandler.present(panel, context);
+      const decision: EventInterventionDecision = await interventionHandler.present(panel, context);
       resolutionMode = decision.mode;
 
       if (decision.mode === "player") {
@@ -1729,103 +1731,318 @@ function sumResourcePools(values: ResourcePool[]): ResourcePool {
   );
 }
 
-export function runSimulation(config: SimulationConfig): SimulationResult {
-  const resources = cloneResources(config.initialResources);
-  const regions: Region[] = config.regions.map((region) => ({ ...region }));
-  const estates: Estate[] = config.estates.map((estate) => ({ ...estate }));
-  const departments: DepartmentState[] = config.departments.map((department) => ({ ...department }));
-  const trust = initializeTrustLevels(estates, config.initialTrust);
-  const modifiers: GlobalModifiers = {
-    stability: 0,
-    threat: 0,
-    budget: 0,
-    reputation: {},
-    securityPressure: 0,
-    securityEscalationStage: 0,
-    securityRecovery: 0,
-  };
-  const timedEffects: TimedEffect[] = [];
-  const activeEvents: ActiveEvent[] = [];
-  const planState = initializeStrategicPlan(config.agenda);
-  const councilState = initializeCouncilState(config.council);
-  const responsePosture = config.responsePosture;
+interface AdvanceQuarterOptions {
+  interventionHandler?: EventInterventionHandler;
+}
 
-  const reports: QuarterlyReport[] = [];
-  let totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
-  let totalExpenses: QuarterlyExpenses = {
+export class SimulationSession {
+  private readonly config: SimulationConfig;
+  private readonly defaultHandler?: EventInterventionHandler;
+  private currentQuarter = 0;
+  private totalQuarters: number;
+
+  private resources: ResourcePool;
+  private regions: Region[];
+  private estates: Estate[];
+  private departments: DepartmentState[];
+  private trust: TrustLevels;
+  private modifiers: GlobalModifiers;
+  private timedEffects: TimedEffect[] = [];
+  private activeEvents: ActiveEvent[] = [];
+  private planState: StrategicPlanState;
+  private councilState: CouncilMemberState[];
+  private readonly responsePosture: ResponsePostureSettings;
+
+  private reports: QuarterlyReport[] = [];
+  private totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
+  private totalExpenses: QuarterlyExpenses = {
     departments: Object.fromEntries(DEPARTMENTS.map((department) => [department, 0])) as Record<Department, number>,
     total: 0,
   };
-  const interventionLog: EventInterventionLogEntry[] = [];
+  private interventionLog: EventInterventionLogEntry[] = [];
 
-  let previousTotalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
-  let previousStability: number | null = null;
-  let previousGrowth: number | null = null;
-  let previousSecurity: number | null = null;
-  let previousCrises: number | null = null;
-  let latestKPI: KPIReport | null = null;
+  private previousTotalWealth: number;
+  private previousStability: number | null = null;
+  private previousGrowth: number | null = null;
+  private previousSecurity: number | null = null;
+  private previousCrises: number | null = null;
+  private latestKPI: KPIReport | null = null;
 
-  const fallbackDecisionStrategy: EventDecisionStrategy =
-    config.eventDecisionStrategy ?? defaultDecisionStrategy;
-  const controlRuntime = initializeControlRuntimeState(
-    config.controlSettings,
-    fallbackDecisionStrategy
-  );
-  if (config.quarters > 0) {
-    logControlModeChange(controlRuntime, 1, "Стартовый режим кампании", "initial");
+  private readonly fallbackDecisionStrategy: EventDecisionStrategy;
+  private readonly controlRuntime: ControlRuntimeState;
+
+  constructor(config: SimulationConfig, existingState?: SimulationSessionState) {
+    this.config = config;
+    this.defaultHandler = config.eventInterventionHandler;
+    this.totalQuarters = existingState?.totalQuarters ?? config.quarters;
+    this.responsePosture = config.responsePosture;
+
+    this.fallbackDecisionStrategy = config.eventDecisionStrategy ?? defaultDecisionStrategy;
+    this.controlRuntime = initializeControlRuntimeState(
+      config.controlSettings,
+      this.fallbackDecisionStrategy
+    );
+
+    if (existingState) {
+      this.currentQuarter = existingState.currentQuarter;
+      this.resources = cloneResources(existingState.resources);
+      this.regions = existingState.regions.map((region) => ({ ...region }));
+      this.estates = existingState.estates.map((estate) => ({ ...estate }));
+      this.departments = existingState.departments.map((department) => ({ ...department }));
+      this.trust = cloneTrustLevels(existingState.trust);
+      this.modifiers = {
+        stability: existingState.modifiers.stability,
+        threat: existingState.modifiers.threat,
+        budget: existingState.modifiers.budget,
+        reputation: { ...existingState.modifiers.reputation },
+        securityPressure: existingState.modifiers.securityPressure,
+        securityEscalationStage: existingState.modifiers.securityEscalationStage,
+        securityRecovery: existingState.modifiers.securityRecovery,
+      };
+      this.timedEffects = existingState.timedEffects.map((effect) => ({
+        effect: { ...effect.effect },
+        remaining: effect.remaining,
+        source: effect.source,
+      }));
+      this.activeEvents = existingState.activeEvents.map((entry) => ({
+        event: JSON.parse(JSON.stringify(entry.event)) as SimulationEvent,
+        remainingTime: entry.remainingTime,
+        originQuarter: entry.originQuarter,
+        escalated: entry.escalated,
+      }));
+      this.planState = cloneStrategicPlan(existingState.plan);
+      this.councilState = cloneCouncilState(existingState.council);
+      this.reports = existingState.reports.map((report) => JSON.parse(JSON.stringify(report)) as QuarterlyReport);
+      this.totalIncomes = { ...existingState.totalIncomes };
+      this.totalExpenses = {
+        departments: { ...existingState.totalExpenses.departments } as Record<Department, number>,
+        total: existingState.totalExpenses.total,
+      };
+      this.interventionLog = existingState.interventionLog.map((entry) => ({ ...entry }));
+      this.previousTotalWealth = existingState.previousTotals.wealth;
+      this.previousStability = existingState.previousTotals.stability;
+      this.previousGrowth = existingState.previousTotals.growth;
+      this.previousSecurity = existingState.previousTotals.security;
+      this.previousCrises = existingState.previousTotals.crises;
+      this.latestKPI = existingState.latestKPI
+        ? (JSON.parse(JSON.stringify(existingState.latestKPI)) as KPIReport)
+        : null;
+      this.controlRuntime.currentMode = existingState.controlState.currentMode;
+      this.controlRuntime.history = existingState.controlState.history.map((entry) => ({ ...entry }));
+      this.controlRuntime.pendingTransitions = existingState.pendingTransitions.map((transition) => ({
+        ...transition,
+      }));
+      this.controlRuntime.currentStrategy =
+        this.controlRuntime.strategies[this.controlRuntime.currentMode] ?? this.fallbackDecisionStrategy;
+    } else {
+      this.resources = cloneResources(config.initialResources);
+      this.regions = config.regions.map((region) => ({ ...region }));
+      this.estates = config.estates.map((estate) => ({ ...estate }));
+      this.departments = config.departments.map((department) => ({ ...department }));
+      this.trust = initializeTrustLevels(this.estates, config.initialTrust);
+      this.modifiers = {
+        stability: 0,
+        threat: 0,
+        budget: 0,
+        reputation: {},
+        securityPressure: 0,
+        securityEscalationStage: 0,
+        securityRecovery: 0,
+      };
+      this.planState = initializeStrategicPlan(config.agenda);
+      this.councilState = initializeCouncilState(config.council);
+      this.previousTotalWealth = this.regions.reduce((acc, region) => acc + region.wealth, 0);
+
+      if (this.totalQuarters > 0) {
+        logControlModeChange(this.controlRuntime, 1, "Стартовый режим кампании", "initial");
+      }
+    }
   }
 
-  for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
-    applyScheduledTransitions(controlRuntime, quarter);
-    applyTimedEffects(timedEffects, resources, regions, estates, modifiers);
+  isComplete(): boolean {
+    return this.totalQuarters > 0 && this.currentQuarter >= this.totalQuarters;
+  }
 
-    const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
-    const loyaltyModifier = taxLoyaltyModifier(config.decree.taxPolicy);
-    const economyEfficiency = departments.find((d) => d.name === "economy")?.efficiency ?? 1;
-    const scienceEfficiency = departments.find((d) => d.name === "science")?.efficiency ?? 1;
+  extendCampaign(extraQuarters: number) {
+    if (!Number.isFinite(extraQuarters) || extraQuarters <= 0) {
+      return;
+    }
+    this.totalQuarters += Math.floor(extraQuarters);
+  }
+
+  getCurrentQuarter(): number {
+    return this.currentQuarter;
+  }
+
+  getTotalQuarters(): number {
+    return this.totalQuarters;
+  }
+
+  getLatestReport(): QuarterlyReport | null {
+    return this.reports.length > 0 ? this.reports[this.reports.length - 1] : null;
+  }
+
+  getReports(): QuarterlyReport[] {
+    return [...this.reports];
+  }
+
+  getControlState(): CampaignControlState {
+    return {
+      currentMode: this.controlRuntime.currentMode,
+      history: this.controlRuntime.history.map((entry) => ({ ...entry })),
+    };
+  }
+
+  setControlMode(mode: CampaignControlMode, reason?: string, triggeredBy?: string) {
+    setControlMode(
+      this.controlRuntime,
+      mode,
+      Math.max(1, this.currentQuarter || 1),
+      reason,
+      triggeredBy
+    );
+  }
+
+  getSnapshot(): SimulationSessionSnapshot {
+    return {
+      quarter: this.currentQuarter,
+      totalQuarters: this.totalQuarters,
+      resources: cloneResources(this.resources),
+      trust: cloneTrustLevels(this.trust),
+      modifiers: {
+        stability: this.modifiers.stability,
+        threat: this.modifiers.threat,
+        budget: this.modifiers.budget,
+        securityPressure: this.modifiers.securityPressure,
+      },
+      activeEvents: this.activeEvents.map((entry) => ({
+        event: JSON.parse(JSON.stringify(entry.event)) as SimulationEvent,
+        remainingTime: entry.remainingTime,
+        originQuarter: entry.originQuarter,
+        escalated: entry.escalated,
+      })),
+      interventionLog: this.interventionLog.map((entry) => ({ ...entry })),
+      controlState: this.getControlState(),
+      plan: cloneStrategicPlan(this.planState),
+      council: cloneCouncilState(this.councilState),
+    };
+  }
+
+  exportState(): SimulationSessionState {
+    return {
+      currentQuarter: this.currentQuarter,
+      totalQuarters: this.totalQuarters,
+      resources: cloneResources(this.resources),
+      regions: this.regions.map((region) => ({ ...region })),
+      estates: this.estates.map((estate) => ({ ...estate })),
+      departments: this.departments.map((department) => ({ ...department })),
+      trust: cloneTrustLevels(this.trust),
+      modifiers: {
+        stability: this.modifiers.stability,
+        threat: this.modifiers.threat,
+        budget: this.modifiers.budget,
+        securityPressure: this.modifiers.securityPressure,
+        securityEscalationStage: this.modifiers.securityEscalationStage,
+        securityRecovery: this.modifiers.securityRecovery,
+        reputation: { ...this.modifiers.reputation },
+      },
+      timedEffects: this.timedEffects.map((effect) => ({
+        effect: { ...effect.effect },
+        remaining: effect.remaining,
+        source: effect.source,
+      })),
+      activeEvents: this.activeEvents.map((entry) => ({
+        event: JSON.parse(JSON.stringify(entry.event)) as SimulationEvent,
+        remainingTime: entry.remainingTime,
+        originQuarter: entry.originQuarter,
+        escalated: entry.escalated,
+      })),
+      plan: cloneStrategicPlan(this.planState),
+      council: cloneCouncilState(this.councilState),
+      reports: this.reports.map((report) => JSON.parse(JSON.stringify(report)) as QuarterlyReport),
+      totalIncomes: cloneResources(this.totalIncomes),
+      totalExpenses: {
+        departments: Object.fromEntries(
+          DEPARTMENTS.map((department) => [department, this.totalExpenses.departments[department] ?? 0])
+        ) as Record<Department, number>,
+        total: this.totalExpenses.total,
+      },
+      interventionLog: this.interventionLog.map((entry) => ({ ...entry })),
+      previousTotals: {
+        wealth: this.previousTotalWealth,
+        stability: this.previousStability,
+        growth: this.previousGrowth,
+        security: this.previousSecurity,
+        crises: this.previousCrises,
+      },
+      latestKPI: this.latestKPI ? (JSON.parse(JSON.stringify(this.latestKPI)) as KPIReport) : null,
+      controlState: this.getControlState(),
+      pendingTransitions: this.controlRuntime.pendingTransitions.map((transition) => ({ ...transition })),
+    };
+  }
+
+  static fromState(config: SimulationConfig, state: SimulationSessionState): SimulationSession {
+    return new SimulationSession(config, state);
+  }
+
+  async advanceQuarter(options: AdvanceQuarterOptions = {}): Promise<QuarterlyReport> {
+    const nextQuarter = this.currentQuarter + 1;
+    if (this.totalQuarters > 0 && nextQuarter > this.totalQuarters) {
+      throw new Error("Лимит кварталов завершён. Увеличьте лимит кампании перед продолжением.");
+    }
+
+    this.currentQuarter = nextQuarter;
+
+    applyScheduledTransitions(this.controlRuntime, nextQuarter);
+    applyTimedEffects(this.timedEffects, this.resources, this.regions, this.estates, this.modifiers);
+
+    const decreeTaxModifier = taxIncomeModifier(this.config.decree.taxPolicy);
+    const loyaltyModifier = taxLoyaltyModifier(this.config.decree.taxPolicy);
+    const economyEfficiency = this.departments.find((d) => d.name === "economy")?.efficiency ?? 1;
+    const scienceEfficiency = this.departments.find((d) => d.name === "science")?.efficiency ?? 1;
 
     const incomes = sumResourcePools(
-      regions.map((region) =>
+      this.regions.map((region) =>
         calculateRegionIncome(
           region,
           decreeTaxModifier,
           economyEfficiency,
           scienceEfficiency,
-          config.decree.investmentPriority,
+          this.config.decree.investmentPriority,
           QUARTER_DURATION,
-          modifiers.stability
+          this.modifiers.stability
         )
       )
     );
 
-    totalIncomes = addResources(totalIncomes, incomes);
-    const newResources = addResources(resources, incomes);
-    resources.gold = newResources.gold;
-    resources.influence = newResources.influence;
-    resources.labor = newResources.labor;
+    this.totalIncomes = addResources(this.totalIncomes, incomes);
+    const newResources = addResources(this.resources, incomes);
+    this.resources.gold = newResources.gold;
+    this.resources.influence = newResources.influence;
+    this.resources.labor = newResources.labor;
 
-    assignMandatesToCouncil(planState, councilState);
-    const agendaWeights = calculateAgendaBudgetWeights(planState, councilState);
+    assignMandatesToCouncil(this.planState, this.councilState);
+    const agendaWeights = calculateAgendaBudgetWeights(this.planState, this.councilState);
 
     const advisorContext: AdvisorContext = {
-      resources,
-      estates,
-      departments,
-      decree: config.decree,
-      trust: cloneTrustLevels(trust),
-      agenda: cloneStrategicPlan(planState),
-      council: cloneCouncilState(councilState),
+      resources: this.resources,
+      estates: this.estates,
+      departments: this.departments,
+      decree: this.config.decree,
+      trust: cloneTrustLevels(this.trust),
+      agenda: cloneStrategicPlan(this.planState),
+      council: cloneCouncilState(this.councilState),
     };
 
     const allocation = normalizeAllocationWithDecree(
-      config.advisor,
+      this.config.advisor,
       advisorContext,
-      config.decree.investmentPriority,
+      this.config.decree.investmentPriority,
       agendaWeights
     );
 
-    const effectiveBaseBudget = Math.max(60, config.baseQuarterBudget + modifiers.budget);
-    const availableBudget = Math.min(effectiveBaseBudget, resources.gold * 0.7);
+    const effectiveBaseBudget = Math.max(60, this.config.baseQuarterBudget + this.modifiers.budget);
+    const availableBudget = Math.min(effectiveBaseBudget, this.resources.gold * 0.7);
     const spending: Record<Department, number> = {} as Record<Department, number>;
     let plannedTotal = 0;
 
@@ -1835,12 +2052,12 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       plannedTotal += value;
     }
 
-    if (plannedTotal > resources.gold) {
-      const ratio = resources.gold / plannedTotal;
+    if (plannedTotal > this.resources.gold) {
+      const ratio = this.resources.gold / Math.max(1, plannedTotal);
       for (const department of DEPARTMENTS) {
         spending[department] *= ratio;
       }
-      plannedTotal = resources.gold;
+      plannedTotal = this.resources.gold;
     }
 
     const expenses: QuarterlyExpenses = {
@@ -1850,110 +2067,110 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       total: Number(plannedTotal.toFixed(2)),
     };
 
-    totalExpenses.total += expenses.total;
+    this.totalExpenses.total += expenses.total;
     for (const department of DEPARTMENTS) {
-      totalExpenses.departments[department] =
-        (totalExpenses.departments[department] ?? 0) + expenses.departments[department];
+      this.totalExpenses.departments[department] =
+        (this.totalExpenses.departments[department] ?? 0) + expenses.departments[department];
     }
 
-    resources.gold = Math.max(0, resources.gold - expenses.total);
+    this.resources.gold = Math.max(0, this.resources.gold - expenses.total);
 
     updateDepartmentState(
-      departments,
+      this.departments,
       spending,
       effectiveBaseBudget,
-      config.decree.investmentPriority,
+      this.config.decree.investmentPriority,
       QUARTER_DURATION,
-      planState,
-      councilState
+      this.planState,
+      this.councilState
     );
 
-    updateProjectsProgress(planState.projects, spending, effectiveBaseBudget);
+    updateProjectsProgress(this.planState.projects, spending, effectiveBaseBudget);
 
     const regionEvents = updateRegions(
-      regions,
+      this.regions,
       spending,
-      config.decree.investmentPriority,
+      this.config.decree.investmentPriority,
       loyaltyModifier,
       QUARTER_DURATION
     );
     const estateEvents = updateEstates(
-      estates,
+      this.estates,
       spending,
-      config.decree.taxPolicy,
+      this.config.decree.taxPolicy,
       QUARTER_DURATION
     );
 
     const generatedEvents: SimulationEvent[] = [...regionEvents, ...estateEvents];
-    if (resources.gold < effectiveBaseBudget * 0.3) {
-      generatedEvents.push(createTreasuryDepletionEvent(resources.gold));
+    if (this.resources.gold < effectiveBaseBudget * 0.3) {
+      generatedEvents.push(createTreasuryDepletionEvent(this.resources.gold));
     }
 
-    const quarterEvents = resolveEventsForQuarter(
-      quarter,
-      activeEvents,
+    const handler = options.interventionHandler ?? this.defaultHandler;
+    const quarterEvents = await resolveEventsForQuarter(
+      nextQuarter,
+      this.activeEvents,
       generatedEvents,
-      controlRuntime.currentStrategy,
+      this.controlRuntime.currentStrategy,
       () => ({
-        quarter,
-        resources: { ...resources },
-        estates: estates.map((estate) => ({ ...estate })),
-        regions: regions.map((region) => ({ ...region })),
-        departments: departments.map((department) => ({ ...department })),
-        trust: cloneTrustLevels(trust),
-        kpis: latestKPI,
-        posture: responsePosture.default,
-        agenda: cloneStrategicPlan(planState),
-        council: cloneCouncilState(councilState),
+        quarter: nextQuarter,
+        resources: { ...this.resources },
+        estates: this.estates.map((estate) => ({ ...estate })),
+        regions: this.regions.map((region) => ({ ...region })),
+        departments: this.departments.map((department) => ({ ...department })),
+        trust: cloneTrustLevels(this.trust),
+        kpis: this.latestKPI,
+        posture: this.responsePosture.default,
+        agenda: cloneStrategicPlan(this.planState),
+        council: cloneCouncilState(this.councilState),
       }),
-      resources,
-      regions,
-      estates,
-      modifiers,
-      timedEffects,
-      trust,
-      responsePosture,
-      config.eventInterventionHandler,
-      interventionLog
+      this.resources,
+      this.regions,
+      this.estates,
+      this.modifiers,
+      this.timedEffects,
+      this.trust,
+      this.responsePosture,
+      handler,
+      this.interventionLog
     );
 
     const averageLoyaltyRaw =
-      regions.reduce((acc, region) => acc + region.loyalty, 0) / regions.length;
-    const averageLoyalty = clamp(averageLoyaltyRaw + modifiers.stability, 0, 100);
-    const totalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
-    const economicGrowth = totalWealth - previousTotalWealth;
+      this.regions.reduce((acc, region) => acc + region.loyalty, 0) / Math.max(1, this.regions.length);
+    const averageLoyalty = clamp(averageLoyaltyRaw + this.modifiers.stability, 0, 100);
+    const totalWealth = this.regions.reduce((acc, region) => acc + region.wealth, 0);
+    const economicGrowth = totalWealth - this.previousTotalWealth;
     const militarySpend = spending.military ?? 0;
     const militaryShare = (militarySpend / Math.max(1, effectiveBaseBudget)) * 100;
-    const minLoyalty = Math.min(...regions.map((region) => region.loyalty));
-    const threatPenalty = Math.max(0, modifiers.threat) * 5;
+    const minLoyalty = this.regions.length > 0 ? Math.min(...this.regions.map((region) => region.loyalty)) : 0;
+    const threatPenalty = Math.max(0, this.modifiers.threat) * 5;
     const securityIndex = clamp(
       Math.min(minLoyalty, Math.min(100, militaryShare)) - threatPenalty,
       0,
       100
     );
-    const activeCrises =
-      activeEvents.filter((event) => event.event.severity !== "minor").length;
+    const activeCrises = this.activeEvents.filter((event) => event.event.severity !== "minor").length;
 
     const kpis: KPIReport = {
-      stability: createKPIEntry("stability", averageLoyalty, previousStability),
-      economicGrowth: createKPIEntry("economicGrowth", economicGrowth, previousGrowth),
-      securityIndex: createKPIEntry("securityIndex", securityIndex, previousSecurity),
-      activeCrises: createKPIEntry("activeCrises", activeCrises, previousCrises),
+      stability: createKPIEntry("stability", averageLoyalty, this.previousStability),
+      economicGrowth: createKPIEntry("economicGrowth", economicGrowth, this.previousGrowth),
+      securityIndex: createKPIEntry("securityIndex", securityIndex, this.previousSecurity),
+      activeCrises: createKPIEntry("activeCrises", activeCrises, this.previousCrises),
     };
 
-    previousTotalWealth = totalWealth;
-    previousStability = kpis.stability.value;
-    previousGrowth = kpis.economicGrowth.value;
-    previousSecurity = kpis.securityIndex.value;
-    previousCrises = kpis.activeCrises.value;
-    latestKPI = kpis;
+    this.previousTotalWealth = totalWealth;
+    this.previousStability = kpis.stability.value;
+    this.previousGrowth = kpis.economicGrowth.value;
+    this.previousSecurity = kpis.securityIndex.value;
+    this.previousCrises = kpis.activeCrises.value;
+    this.latestKPI = kpis;
 
     const kpiTriggeredEvents = [
-      ...generateKpiEvents(kpis, regions),
-      ...evaluateSecurityEscalation(kpis, regions, modifiers),
+      ...generateKpiEvents(kpis, this.regions),
+      ...evaluateSecurityEscalation(kpis, this.regions, this.modifiers),
     ];
     if (kpiTriggeredEvents.length > 0) {
-      enqueueEvents(activeEvents, kpiTriggeredEvents, quarter);
+      enqueueEvents(this.activeEvents, kpiTriggeredEvents, nextQuarter);
       for (const event of kpiTriggeredEvents) {
         quarterEvents.push({
           event,
@@ -1967,50 +2184,50 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
     }
 
     const mandateReports = evaluateMandates(
-      planState,
-      quarter,
-      resources,
-      regions,
-      estates,
-      departments,
+      this.planState,
+      nextQuarter,
+      this.resources,
+      this.regions,
+      this.estates,
+      this.departments,
       kpis
     );
-    adjustCouncilMorale(councilState, mandateReports);
-    const councilReports = generateCouncilReports(councilState, mandateReports, agendaWeights);
-    const agendaHighlights = buildAgendaHighlights(planState, agendaWeights);
+    adjustCouncilMorale(this.councilState, mandateReports);
+    const councilReports = generateCouncilReports(this.councilState, mandateReports, agendaWeights);
+    const agendaHighlights = buildAgendaHighlights(this.planState, agendaWeights);
 
-    updateEstateTrust(trust, estates);
+    updateEstateTrust(this.trust, this.estates);
 
     const hasFailures = quarterEvents.some((entry) => entry.status === "failed");
     if (hasFailures) {
-      adjustAdvisorTrust(trust, -0.02);
+      adjustAdvisorTrust(this.trust, -0.02);
     } else if (quarterEvents.some((entry) => entry.status === "resolved" && entry.event.severity !== "minor")) {
-      adjustAdvisorTrust(trust, 0.01);
+      adjustAdvisorTrust(this.trust, 0.01);
     }
 
     if (kpis.stability.trend > 0) {
-      adjustAdvisorTrust(trust, 0.005);
+      adjustAdvisorTrust(this.trust, 0.005);
     } else if (kpis.stability.trend < 0) {
-      adjustAdvisorTrust(trust, -0.005);
+      adjustAdvisorTrust(this.trust, -0.005);
     }
 
-    const trustSnapshot = cloneTrustLevels(trust);
+    const trustSnapshot = cloneTrustLevels(this.trust);
     const consultationContext: EventDecisionContext = {
-      quarter,
-      resources: { ...resources },
-      estates: estates.map((estate) => ({ ...estate })),
-      regions: regions.map((region) => ({ ...region })),
-      departments: departments.map((department) => ({ ...department })),
+      quarter: nextQuarter,
+      resources: { ...this.resources },
+      estates: this.estates.map((estate) => ({ ...estate })),
+      regions: this.regions.map((region) => ({ ...region })),
+      departments: this.departments.map((department) => ({ ...department })),
       trust: trustSnapshot,
       kpis,
-      posture: responsePosture.default,
-      agenda: cloneStrategicPlan(planState),
-      council: cloneCouncilState(councilState),
+      posture: this.responsePosture.default,
+      agenda: cloneStrategicPlan(this.planState),
+      council: cloneCouncilState(this.councilState),
     };
     const advisorConsultations = generateAdvisorConsultations(consultationContext, quarterEvents);
 
-    reports.push({
-      quarter,
+    const report: QuarterlyReport = {
+      quarter: nextQuarter,
       incomes: {
         gold: Number(incomes.gold.toFixed(2)),
         influence: Number(incomes.influence.toFixed(2)),
@@ -2018,95 +2235,108 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       },
       expenses,
       treasury: {
-        gold: Number(resources.gold.toFixed(2)),
-        influence: Number(resources.influence.toFixed(2)),
-        labor: Number(resources.labor.toFixed(2)),
+        gold: Number(this.resources.gold.toFixed(2)),
+        influence: Number(this.resources.influence.toFixed(2)),
+        labor: Number(this.resources.labor.toFixed(2)),
       },
-      estates: snapshotEstates(estates),
-      regions: snapshotRegions(regions, modifiers),
-      departments: snapshotDepartments(departments, expenses, planState),
+      estates: snapshotEstates(this.estates),
+      regions: snapshotRegions(this.regions, this.modifiers),
+      departments: snapshotDepartments(this.departments, expenses, this.planState),
       events: quarterEvents,
       kpis,
       trust: trustSnapshot,
-      activeThreatLevel: Number(modifiers.threat.toFixed(2)),
+      activeThreatLevel: Number(this.modifiers.threat.toFixed(2)),
       councilReports,
       mandateProgress: mandateReports,
-      projects: snapshotProjects(planState.projects, councilState),
+      projects: snapshotProjects(this.planState.projects, this.councilState),
       agendaHighlights,
       advisorConsultations,
-      controlMode: controlRuntime.currentMode,
-    });
+      controlMode: this.controlRuntime.currentMode,
+    };
 
-    modifiers.stability = Number((modifiers.stability * 0.85).toFixed(2));
-    modifiers.threat = Number((modifiers.threat * 0.9).toFixed(2));
-    modifiers.budget = Number((modifiers.budget * 0.75).toFixed(2));
-    modifiers.securityPressure = Number(
-      Math.max(0, modifiers.securityPressure * 0.92).toFixed(2)
+    this.reports.push(report);
+
+    this.modifiers.stability = Number((this.modifiers.stability * 0.85).toFixed(2));
+    this.modifiers.threat = Number((this.modifiers.threat * 0.9).toFixed(2));
+    this.modifiers.budget = Number((this.modifiers.budget * 0.75).toFixed(2));
+    this.modifiers.securityPressure = Number(
+      Math.max(0, this.modifiers.securityPressure * 0.92).toFixed(2)
     );
-    for (const key of Object.keys(modifiers.reputation)) {
-      modifiers.reputation[key] = Number((modifiers.reputation[key] * 0.9).toFixed(2));
+    for (const key of Object.keys(this.modifiers.reputation)) {
+      this.modifiers.reputation[key] = Number((this.modifiers.reputation[key] * 0.9).toFixed(2));
     }
+
+    return report;
   }
 
-  const kpiAverages = reports.reduce(
-    (acc, report) => {
-      acc.stability += report.kpis.stability.value;
-      acc.economicGrowth += report.kpis.economicGrowth.value;
-      acc.securityIndex += report.kpis.securityIndex.value;
-      acc.activeCrises += report.kpis.activeCrises.value;
-      return acc;
-    },
-    { stability: 0, economicGrowth: 0, securityIndex: 0, activeCrises: 0 }
-  );
+  buildResult(): SimulationResult {
+    const reports = this.reports.map((report) => JSON.parse(JSON.stringify(report)) as QuarterlyReport);
 
-  if (reports.length > 0) {
-    kpiAverages.stability = Number((kpiAverages.stability / reports.length).toFixed(2));
-    kpiAverages.economicGrowth = Number((kpiAverages.economicGrowth / reports.length).toFixed(2));
-    kpiAverages.securityIndex = Number((kpiAverages.securityIndex / reports.length).toFixed(2));
-    kpiAverages.activeCrises = Number((kpiAverages.activeCrises / reports.length).toFixed(2));
+    const kpiAverages = reports.reduce(
+      (acc, report) => {
+        acc.stability += report.kpis.stability.value;
+        acc.economicGrowth += report.kpis.economicGrowth.value;
+        acc.securityIndex += report.kpis.securityIndex.value;
+        acc.activeCrises += report.kpis.activeCrises.value;
+        return acc;
+      },
+      { stability: 0, economicGrowth: 0, securityIndex: 0, activeCrises: 0 }
+    );
+
+    if (reports.length > 0) {
+      kpiAverages.stability = Number((kpiAverages.stability / reports.length).toFixed(2));
+      kpiAverages.economicGrowth = Number((kpiAverages.economicGrowth / reports.length).toFixed(2));
+      kpiAverages.securityIndex = Number((kpiAverages.securityIndex / reports.length).toFixed(2));
+      kpiAverages.activeCrises = Number((kpiAverages.activeCrises / reports.length).toFixed(2));
+    }
+
+    return {
+      reports,
+      kpiSummary: {
+        latest: reports[reports.length - 1]?.kpis ?? null,
+        averages: kpiAverages,
+      },
+      totals: {
+        incomes: {
+          gold: Number(this.totalIncomes.gold.toFixed(2)),
+          influence: Number(this.totalIncomes.influence.toFixed(2)),
+          labor: Number(this.totalIncomes.labor.toFixed(2)),
+        },
+        expenses: {
+          departments: Object.fromEntries(
+            DEPARTMENTS.map((department) => [
+              department,
+              Number((this.totalExpenses.departments[department] ?? 0).toFixed(2)),
+            ])
+          ) as Record<Department, number>,
+          total: Number(this.totalExpenses.total.toFixed(2)),
+        },
+      },
+      finalState: {
+        resources: {
+          gold: Number(this.resources.gold.toFixed(2)),
+          influence: Number(this.resources.influence.toFixed(2)),
+          labor: Number(this.resources.labor.toFixed(2)),
+        },
+        regions: this.regions.map((region) => ({ ...region })),
+        estates: this.estates.map((estate) => ({ ...estate })),
+        departments: this.departments.map((department) => ({ ...department })),
+        trust: cloneTrustLevels(this.trust),
+        activeThreatLevel: Number(this.modifiers.threat.toFixed(2)),
+        council: cloneCouncilState(this.councilState),
+        plan: cloneStrategicPlan(this.planState),
+        controlMode: this.controlRuntime.currentMode,
+      },
+      interventionLog: this.interventionLog.map((entry) => ({ ...entry })),
+      controlState: this.getControlState(),
+    };
   }
+}
 
-  return {
-    reports,
-    kpiSummary: {
-      latest: reports[reports.length - 1]?.kpis ?? null,
-      averages: kpiAverages,
-    },
-    totals: {
-      incomes: {
-        gold: Number(totalIncomes.gold.toFixed(2)),
-        influence: Number(totalIncomes.influence.toFixed(2)),
-        labor: Number(totalIncomes.labor.toFixed(2)),
-      },
-      expenses: {
-        departments: Object.fromEntries(
-          DEPARTMENTS.map((department) => [
-            department,
-            Number((totalExpenses.departments[department] ?? 0).toFixed(2)),
-          ])
-        ) as Record<Department, number>,
-        total: Number(totalExpenses.total.toFixed(2)),
-      },
-    },
-    finalState: {
-      resources: {
-        gold: Number(resources.gold.toFixed(2)),
-        influence: Number(resources.influence.toFixed(2)),
-        labor: Number(resources.labor.toFixed(2)),
-      },
-      regions,
-      estates,
-      departments,
-      trust: cloneTrustLevels(trust),
-      activeThreatLevel: Number(modifiers.threat.toFixed(2)),
-      council: cloneCouncilState(councilState),
-      plan: cloneStrategicPlan(planState),
-      controlMode: controlRuntime.currentMode,
-    },
-    interventionLog: interventionLog.map((entry) => ({ ...entry })),
-    controlState: {
-      currentMode: controlRuntime.currentMode,
-      history: controlRuntime.history.map((entry) => ({ ...entry })),
-    },
-  };
+export async function runSimulation(config: SimulationConfig): Promise<SimulationResult> {
+  const session = new SimulationSession(config);
+  while (!session.isComplete()) {
+    await session.advanceQuarter();
+  }
+  return session.buildResult();
 }

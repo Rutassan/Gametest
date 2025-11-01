@@ -72,9 +72,10 @@ function describeOption(
   return match?.description ?? null;
 }
 
-const config = buildBaselineConfig();
-const result = runSimulation(config);
-const summary = result.kpiSummary;
+async function main() {
+  const config = buildBaselineConfig();
+  const result = await runSimulation(config);
+  const summary = result.kpiSummary;
 const reports = result.reports;
 const targetDir = join(process.cwd(), "dist");
 const saveInfo = saveSimulationResult(result, {
@@ -1059,3 +1060,9 @@ console.log(`UI дашборд сохранён:`);
 console.log(` • Статический отчёт: ${staticDashboardPath}`);
 console.log(` • Интерактив: ${spaIndexPath}`);
 console.log(` • Данные GraphQL: ${dataPath}`);
+}
+
+main().catch((error) => {
+  console.error("Ошибка генерации дашборда", error);
+  process.exitCode = 1;
+});

@@ -168,6 +168,17 @@ export interface CouncilReport {
   alerts?: string[];
 }
 
+export interface CouncilMemberState {
+  id: string;
+  name: string;
+  portfolio: string;
+  stress: number;
+  motivation: number;
+  assignedMandates: string[];
+  focusDepartment?: string;
+  lastQuarterSummary?: string;
+}
+
 export interface MandateProgressReport {
   mandateId: string;
   label: string;
@@ -295,4 +306,40 @@ export interface DashboardPayload {
   data: {
     simulation: SimulationData;
   };
+}
+
+export interface ActiveEventSnapshot {
+  event: SimulationEvent;
+  remainingTime: number;
+  originQuarter: number;
+  escalated?: boolean;
+}
+
+export interface LiveCampaignSessionInfo {
+  currentQuarter: number;
+  totalQuarters: number;
+  controlMode: CampaignControlMode;
+  resources: ResourcePool;
+  trust: TrustLevels;
+  modifiers: {
+    stability: number;
+    threat: number;
+    budget: number;
+    securityPressure: number;
+  };
+  averages: KPIAverages;
+}
+
+export interface LiveCampaignPayload {
+  session: LiveCampaignSessionInfo;
+  activeEvents: ActiveEventSnapshot[];
+  plan: {
+    priorities: Record<string, "neglect" | "steady" | "push">;
+    mandates: MandateProgressReport[];
+    projects: StrategicProjectSnapshot[];
+  };
+  council: CouncilMemberState[];
+  lastReport?: QuarterlyReport;
+  interventionLog: EventInterventionLogEntry[];
+  totals: SimulationTotals;
 }
