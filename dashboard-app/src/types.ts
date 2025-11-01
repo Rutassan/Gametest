@@ -2,6 +2,7 @@ export type ThreatLevel = "low" | "moderate" | "critical";
 export type EventSeverity = "minor" | "moderate" | "major";
 export type EventOutcomeStatus = "resolved" | "failed" | "deferred";
 export type CampaignControlMode = "manual" | "advisor" | "hybrid";
+export type InterventionDecisionMode = "player" | "council";
 export type AdvisorConsultationQueryType = "kpi" | "event" | "department";
 export type AdvisorConsultationStance = "support" | "caution" | "escalate";
 
@@ -58,6 +59,29 @@ export interface RegionSnapshot {
   wealth: number;
   loyalty: number;
   infrastructure: number;
+  riskScore: number;
+  riskLevel: ThreatLevel;
+  riskFactors: string[];
+}
+
+export interface DepartmentQuarterSnapshot {
+  name: string;
+  efficiency: number;
+  budget: number;
+  cumulativeInvestment: number;
+  spendingShare: number;
+  agendaPriority: "neglect" | "steady" | "push";
+}
+
+export interface StrategicProjectSnapshot {
+  id: string;
+  name: string;
+  focus: string;
+  description: string;
+  milestones: number[];
+  progress: number;
+  ownerAdvisorId?: string;
+  ownerAdvisorName?: string;
 }
 
 export interface SimulationEventEffect {
@@ -88,12 +112,23 @@ export interface SimulationEvent {
   origin?: SimulationEventOrigin;
 }
 
+export interface AdvisorOutcomePreview {
+  optionId: string | null;
+  notes?: string;
+}
+
 export interface EventOutcome {
   event: SimulationEvent;
   status: EventOutcomeStatus;
   selectedOptionId?: string | null;
   appliedEffects: SimulationEventEffect[];
   notes?: string;
+  resolutionMode?: InterventionDecisionMode;
+  advisorPreview?: AdvisorOutcomePreview;
+  handoffTarget?: string;
+  handoffIssued?: boolean;
+  handedOffAt?: string;
+  handledBy?: string;
 }
 
 export interface AdvisorConsultationResponse {
@@ -115,9 +150,54 @@ export interface AdvisorConsultationThread {
   responses: AdvisorConsultationResponse[];
   recommendations: string[];
   handoffTarget?: string;
+  handoffIssued?: boolean;
+  handedOffAt?: string;
+  handoffNotes?: string;
   relatedKpi?: keyof KPIReport;
   relatedEventId?: string;
   relatedDepartment?: string;
+}
+
+export interface CouncilReport {
+  advisorId: string;
+  advisorName: string;
+  portfolio: string;
+  summary: string;
+  confidence: number;
+  focusDepartment?: string;
+  alerts?: string[];
+}
+
+export interface MandateProgressReport {
+  mandateId: string;
+  label: string;
+  status: "not_started" | "in_progress" | "on_track" | "at_risk" | "completed" | "failed";
+  progress: number;
+  confidence: number;
+  commentary: string;
+}
+
+export interface AgendaHighlight {
+  department: string;
+  priority: "neglect" | "steady" | "push";
+  commentary: string;
+}
+
+export interface EventInterventionLogEntry {
+  eventId: string;
+  eventTitle: string;
+  quarter: number;
+  mode: InterventionDecisionMode;
+  optionId: string | null;
+  notes?: string;
+  advisorOptionId?: string | null;
+  advisorNotes?: string;
+  remainingTime: number;
+  timestamp: string;
+  handoffTarget?: string;
+  handoffIssued?: boolean;
+  handoffNotes?: string;
+  handledBy?: string;
 }
 
 export interface ControlModeLogEntry {
@@ -145,10 +225,15 @@ export interface QuarterlyReport {
   treasury: ResourcePool;
   estates: EstateSnapshot[];
   regions: RegionSnapshot[];
+  departments: DepartmentQuarterSnapshot[];
   events: EventOutcome[];
   kpis: KPIReport;
   trust: TrustLevels;
   activeThreatLevel: number;
+  councilReports: CouncilReport[];
+  mandateProgress: MandateProgressReport[];
+  projects: StrategicProjectSnapshot[];
+  agendaHighlights: AgendaHighlight[];
   controlMode: CampaignControlMode;
   advisorConsultations: AdvisorConsultationThread[];
 }
@@ -203,6 +288,7 @@ export interface SimulationData {
   finalState: SimulationFinalState;
   reports: QuarterlyReport[];
   controlState: ControlStateSnapshot;
+  interventionLog: EventInterventionLogEntry[];
 }
 
 export interface DashboardPayload {

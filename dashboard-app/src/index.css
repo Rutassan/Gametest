@@ -481,6 +481,378 @@ button:hover {
   margin-top: 6px;
 }
 
+.handoff-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.handoff-feedback {
+  font-size: 12px;
+  color: #34d399;
+  margin-top: 6px;
+}
+
+.handoff-history {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: #cbd5f5;
+}
+
+.department-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.department-card {
+  border-radius: 16px;
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.department-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.department-header h3 {
+  margin: 0;
+  font-size: 16px;
+  color: #bae6fd;
+}
+
+.priority-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.priority-pill.neglect {
+  background: rgba(248, 113, 113, 0.18);
+  color: #f87171;
+}
+
+.priority-pill.steady {
+  background: rgba(148, 163, 184, 0.2);
+  color: #e2e8f0;
+}
+
+.priority-pill.push {
+  background: rgba(34, 197, 94, 0.2);
+  color: #34d399;
+}
+
+.department-stats {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.department-stats div {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.department-stats dt {
+  margin: 0;
+  font-weight: 500;
+}
+
+.department-stats dd {
+  margin: 0;
+}
+
+.progress-bar {
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(51, 65, 85, 0.9);
+  overflow: hidden;
+}
+
+.progress-bar span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #38bdf8 0%, #0ea5e9 100%);
+}
+
+.department-investment {
+  margin: 0;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.agenda-layout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.agenda-column,
+.council-column {
+  flex: 1;
+  min-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agenda-column h3,
+.council-column h3 {
+  margin: 0;
+  font-size: 15px;
+  color: #f1f5f9;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.agenda-list,
+.council-list,
+.mandate-list,
+.project-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.agenda-list li,
+.council-card,
+.mandate-card,
+.project-card {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.agenda-title {
+  font-weight: 600;
+  color: #bae6fd;
+}
+
+.council-card header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.council-name {
+  font-weight: 600;
+}
+
+.council-confidence {
+  color: #93c5fd;
+}
+
+.council-alerts {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #f97316;
+}
+
+.council-focus {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.mandate-project-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.mandate-column,
+.project-column {
+  flex: 1;
+  min-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.mandate-card header,
+.project-card header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.mandate-title,
+.project-title {
+  font-weight: 600;
+  color: #f8fafc;
+}
+
+.mandate-meta,
+.project-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.mandate-pill,
+.resolution-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.mandate-pill.neutral {
+  background: rgba(148, 163, 184, 0.22);
+  color: #cbd5f5;
+}
+
+.mandate-pill.progress {
+  background: rgba(59, 130, 246, 0.22);
+  color: #60a5fa;
+}
+
+.mandate-pill.success {
+  background: rgba(34, 197, 94, 0.22);
+  color: #34d399;
+}
+
+.mandate-pill.risk {
+  background: rgba(250, 204, 21, 0.2);
+  color: #facc15;
+}
+
+.mandate-pill.done {
+  background: rgba(129, 140, 248, 0.25);
+  color: #a5b4fc;
+}
+
+.mandate-pill.failed {
+  background: rgba(248, 113, 113, 0.25);
+  color: #f87171;
+}
+
+.project-focus {
+  font-size: 12px;
+  color: #93c5fd;
+  background: rgba(37, 99, 235, 0.18);
+  padding: 4px 10px;
+  border-radius: 999px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.empty-state.compact {
+  padding: 8px;
+  font-size: 12px;
+}
+
+.estate-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.estate-card {
+  border-radius: 14px;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+  background: rgba(15, 23, 42, 0.55);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.estate-card h4 {
+  margin: 0;
+  color: #e0f2fe;
+}
+
+.estate-metric {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: #cbd5f5;
+}
+
+.risk-pill {
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.risk-low {
+  background: rgba(34, 197, 94, 0.2);
+  color: #34d399;
+}
+
+.risk-moderate {
+  background: rgba(250, 204, 21, 0.2);
+  color: #facc15;
+}
+
+.risk-critical {
+  background: rgba(248, 113, 113, 0.22);
+  color: #f87171;
+}
+
+.region-risk {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.region-risk-factors {
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.resolution-pill.player {
+  background: rgba(56, 189, 248, 0.22);
+  color: #38bdf8;
+}
+
+.resolution-pill.council {
+  background: rgba(129, 140, 248, 0.22);
+  color: #a5b4fc;
+}
+
+.event-resolution {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+}
+
+.handoff-note {
+  color: #94a3b8;
+}
+
 .consultation-note {
   margin-top: 8px;
   font-size: 12px;
@@ -563,6 +935,19 @@ button:hover {
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.region-card.region-low {
+  border-color: rgba(34, 197, 94, 0.25);
+}
+
+.region-card.region-moderate {
+  border-color: rgba(250, 204, 21, 0.3);
+}
+
+.region-card.region-critical {
+  border-color: rgba(248, 113, 113, 0.3);
+  box-shadow: 0 0 18px rgba(248, 113, 113, 0.2);
 }
 
 .region-card h4 {

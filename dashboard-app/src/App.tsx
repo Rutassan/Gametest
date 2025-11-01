@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import type {
   AdvisorConsultationStance,
   AdvisorConsultationThread,
@@ -71,6 +71,58 @@ const consultationStanceMeta: Record<AdvisorConsultationStance, { label: string;
   escalate: { label: "Эскалация", className: "stance-pill escalate" },
 };
 
+const resolutionModeMeta = {
+  player: { label: "Игрок решал", className: "resolution-pill player" },
+  council: { label: "Совет решал", className: "resolution-pill council" },
+} as const;
+
+const departmentLabels: Record<string, string> = {
+  economy: "Экономика",
+  diplomacy: "Дипломатия",
+  internal: "Внутренняя политика",
+  military: "Военное ведомство",
+  science: "Наука",
+  security: "Безопасность",
+  administration: "Администрирование",
+};
+
+const priorityMeta: Record<"neglect" | "steady" | "push", { label: string; className: string }> = {
+  neglect: { label: "Сокращение", className: "priority-pill neglect" },
+  steady: { label: "Базовый режим", className: "priority-pill steady" },
+  push: { label: "Усиление", className: "priority-pill push" },
+};
+
+const mandateStatusMeta = {
+  not_started: { label: "Не начато", className: "mandate-pill neutral" },
+  in_progress: { label: "В работе", className: "mandate-pill progress" },
+  on_track: { label: "В графике", className: "mandate-pill success" },
+  at_risk: { label: "Под угрозой", className: "mandate-pill risk" },
+  completed: { label: "Завершено", className: "mandate-pill done" },
+  failed: { label: "Провалено", className: "mandate-pill failed" },
+} as const;
+
+const riskLabels: Record<ThreatLevel, string> = {
+  low: "Низкий риск",
+  moderate: "Повышенный риск",
+  critical: "Критический риск",
+};
+
+const riskClassMap: Record<ThreatLevel, string> = {
+  low: "risk-pill risk-low",
+  moderate: "risk-pill risk-moderate",
+  critical: "risk-pill risk-critical",
+};
+
+const projectFocusLabels: Record<string, string> = {
+  economy: "Экономика",
+  diplomacy: "Дипломатия",
+  internal: "Внутренняя политика",
+  military: "Армия",
+  science: "Наука",
+  security: "Безопасность",
+  administration: "Администрирование",
+};
+
 function formatDate(iso: string): string {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
@@ -88,6 +140,22 @@ function formatNumber(value: number, fraction = 1): string {
 
 function formatPercent(value: number): string {
   return `${value.toFixed(1)}%`;
+}
+
+function formatShare(value: number): string {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatConfidence(value: number): string {
+  return `${(value * 100).toFixed(0)}%`;
+}
+
+function departmentLabel(name: string): string {
+  return departmentLabels[name] ?? name;
+}
+
+function projectFocusLabel(focus: string): string {
+  return projectFocusLabels[focus] ?? focus;
 }
 
 function describeTrend(entry: KPIEntry): { text: string; css: string } {
@@ -173,14 +241,15 @@ function useSimulationData() {
     load();
   }, []);
 
-  return { data, loading, error, reload: load };
+  return { data, loading, error, reload: load, setData };
 }
 
 export default function App() {
-  const { data: simulation, loading, error, reload } = useSimulationData();
+  const { data: simulation, loading, error, reload, setData } = useSimulationData();
   const [selectedQuarter, setSelectedQuarter] = useState<number | null>(null);
   const [severityFilter, setSeverityFilter] = useState<SeverityFilter>("all");
   const [selectedConsultationId, setSelectedConsultationId] = useState<string | null>(null);
+  const [handoffLog, setHandoffLog] = useState<Array<{ id: string; message: string; timestamp: string }>>([]);
 
   useEffect(() => {
     if (simulation) {
@@ -245,6 +314,109 @@ export default function App() {
     }
     return map;
   }, [consultationsForQuarter]);
+
+  const currentHandoff = useMemo(() => {
+    if (!selectedConsultation) {
+      return null;
+    }
+    return handoffLog.find((entry) => entry.id === selectedConsultation.id) ?? null;
+  }, [handoffLog, selectedConsultation]);
+
+  const handleHandoff = useCallback(() => {
+    if (!selectedConsultation || selectedQuarter === null || !reportForQuarter) {
+      return;
+    }
+
+    if (selectedConsultation.handoffIssued) {
+      const timestamp = new Date().toISOString();
+      const message = `${selectedConsultation.topic}: уже передано исполнение.`;
+      setHandoffLog((previous) => [
+        { id: selectedConsultation.id, message, timestamp },
+        ...previous.filter((entry) => entry.id !== selectedConsultation.id),
+      ].slice(0, 5));
+      return;
+    }
+
+    const target = selectedConsultation.handoffTarget ?? "Совет";
+    const timestamp = new Date().toISOString();
+    const relatedEventTitle = selectedConsultation.relatedEventId
+      ? reportForQuarter.events.find((event) => event.event.id === selectedConsultation.relatedEventId)?.event.title ?? selectedConsultation.topic
+      : selectedConsultation.topic;
+
+    setData((previous) => {
+      if (!previous) {
+        return previous;
+      }
+
+      const reports = previous.reports.map((report) => {
+        if (report.quarter !== selectedQuarter) {
+          return report;
+        }
+
+        const updatedConsultations = report.advisorConsultations.map((thread) =>
+          thread.id === selectedConsultation.id
+            ? {
+                ...thread,
+                handoffIssued: true,
+                handedOffAt: timestamp,
+                handoffNotes: `Передано на ${target}`,
+              }
+            : thread
+        );
+
+        const updatedEvents = report.events.map((eventOutcome) => {
+          if (eventOutcome.event.id !== selectedConsultation.relatedEventId) {
+            return eventOutcome;
+          }
+          return {
+            ...eventOutcome,
+            handoffIssued: true,
+            handoffTarget: target,
+            handedOffAt: timestamp,
+            handledBy: target,
+          };
+        });
+
+        return {
+          ...report,
+          advisorConsultations: updatedConsultations,
+          events: updatedEvents,
+        };
+      });
+
+      const interventionLog = [...(previous.interventionLog ?? [])];
+      if (selectedConsultation.relatedEventId) {
+        interventionLog.push({
+          eventId: selectedConsultation.relatedEventId,
+          eventTitle: relatedEventTitle,
+          quarter: selectedQuarter,
+          mode: "player",
+          optionId: null,
+          notes: `Передача исполнения: ${target}`,
+          advisorOptionId: null,
+          advisorNotes: undefined,
+          remainingTime: 0,
+          timestamp,
+          handoffIssued: true,
+          handoffTarget: target,
+          handoffNotes: "Отметка из дашборда",
+          handledBy: target,
+        });
+      }
+
+      return {
+        ...previous,
+        reports,
+        interventionLog,
+      };
+    });
+
+    const message = `${selectedConsultation.topic}: передано исполнение (${target})`;
+    setHandoffLog((previous) => [
+      { id: selectedConsultation.id, message, timestamp },
+      ...previous.filter((entry) => entry.id !== selectedConsultation.id),
+    ].slice(0, 5));
+  }, [selectedConsultation, selectedQuarter, reportForQuarter, setData]);
 
   const filteredEvents = useMemo<EventOutcome[]>(() => {
     if (!reportForQuarter) {
@@ -322,6 +494,14 @@ export default function App() {
   const estateTrustEntries = reportForQuarter
     ? Object.entries(reportForQuarter.trust.estates)
     : Object.entries(finalState.trust.estates);
+
+  const departments = reportForQuarter?.departments ?? [];
+  const mandates = reportForQuarter?.mandateProgress ?? [];
+  const projects = reportForQuarter?.projects ?? [];
+  const agendaHighlights = reportForQuarter?.agendaHighlights ?? [];
+  const councilReports = reportForQuarter?.councilReports ?? [];
+  const estates = reportForQuarter?.estates ?? [];
+  const regions = reportForQuarter?.regions ?? [];
 
   return (
     <div className="app">
@@ -453,6 +633,186 @@ export default function App() {
         )}
       </section>
 
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Ведомства</h2>
+        </div>
+
+        {reportForQuarter ? (
+          departments.length === 0 ? (
+            <div className="empty-state">Нет данных по ведомствам.</div>
+          ) : (
+            <div className="department-grid">
+              {departments.map((department) => {
+                const priorityInfo = priorityMeta[department.agendaPriority];
+                return (
+                  <article key={department.name} className="department-card">
+                    <header className="department-header">
+                      <h3>{departmentLabel(department.name)}</h3>
+                      <span className={priorityInfo.className}>{priorityInfo.label}</span>
+                    </header>
+                    <dl className="department-stats">
+                      <div>
+                        <dt>Эффективность</dt>
+                        <dd>{department.efficiency.toFixed(2)}</dd>
+                      </div>
+                      <div>
+                        <dt>Бюджет</dt>
+                        <dd>{formatNumber(department.budget, 1)}</dd>
+                      </div>
+                      <div>
+                        <dt>Доля расхода</dt>
+                        <dd>{formatShare(department.spendingShare)}</dd>
+                      </div>
+                    </dl>
+                    <div className="progress-bar">
+                      <span style={{ width: `${Math.min(100, department.spendingShare * 100)}%` }} />
+                    </div>
+                    <p className="department-investment">
+                      Инвестиции за кампанию: {formatNumber(department.cumulativeInvestment, 1)}
+                    </p>
+                  </article>
+                );
+              })}
+            </div>
+          )
+        ) : (
+          <div className="empty-state">Нет данных по ведомствам.</div>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Совет и приоритеты</h2>
+        </div>
+
+        {agendaHighlights.length === 0 && councilReports.length === 0 ? (
+          <div className="empty-state">Совет не предоставил отчёт за выбранный квартал.</div>
+        ) : (
+          <div className="agenda-layout">
+            <div className="agenda-column">
+              <h3>Приоритеты повестки</h3>
+              {agendaHighlights.length === 0 ? (
+                <div className="empty-state compact">Нет изменений приоритетов.</div>
+              ) : (
+                <ul className="agenda-list">
+                  {agendaHighlights.map((highlight) => {
+                    const priorityInfo = priorityMeta[highlight.priority];
+                    return (
+                      <li key={`${highlight.department}-${highlight.commentary}`}>
+                        <span className="agenda-title">{departmentLabel(highlight.department)}</span>
+                        <span className={priorityInfo.className}>{priorityInfo.label}</span>
+                        <p>{highlight.commentary}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="council-column">
+              <h3>Сводки советников</h3>
+              {councilReports.length === 0 ? (
+                <div className="empty-state compact">Нет сообщений совета.</div>
+              ) : (
+                <ul className="council-list">
+                  {councilReports.map((report) => (
+                    <li key={report.advisorId} className="council-card">
+                      <header>
+                        <span className="council-name">{report.advisorName}</span>
+                        <span className="council-confidence">
+                          Уверенность {formatConfidence(report.confidence)}
+                        </span>
+                      </header>
+                      <p>{report.summary}</p>
+                      {report.alerts ? (
+                        <ul className="council-alerts">
+                          {report.alerts.map((alert, index) => (
+                            <li key={index}>⚠ {alert}</li>
+                          ))}
+                        </ul>
+                      ) : null}
+                      {report.focusDepartment ? (
+                        <span className="council-focus">
+                          Фокус: {departmentLabel(report.focusDepartment)}
+                        </span>
+                      ) : null}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Поручения и проекты</h2>
+        </div>
+
+        {reportForQuarter ? (
+          <div className="mandate-project-grid">
+            <div className="mandate-column">
+              <h3>Поручения правителя</h3>
+              {mandates.length === 0 ? (
+                <div className="empty-state compact">Новые поручения не выдавались.</div>
+              ) : (
+                <ul className="mandate-list">
+                  {mandates.map((mandate) => {
+                    const statusMeta = mandateStatusMeta[mandate.status];
+                    return (
+                      <li key={mandate.mandateId} className="mandate-card">
+                        <header>
+                          <span className="mandate-title">{mandate.label}</span>
+                          <span className={statusMeta.className}>{statusMeta.label}</span>
+                        </header>
+                        <div className="progress-bar">
+                          <span style={{ width: `${Math.min(100, mandate.progress * 100)}%` }} />
+                        </div>
+                        <div className="mandate-meta">
+                          <span>Прогресс {Math.round(mandate.progress * 100)}%</span>
+                          <span>Уверенность {formatConfidence(mandate.confidence)}</span>
+                        </div>
+                        <p>{mandate.commentary}</p>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+            <div className="project-column">
+              <h3>Проекты</h3>
+              {projects.length === 0 ? (
+                <div className="empty-state compact">Проекты в этом квартале не обновлялись.</div>
+              ) : (
+                <ul className="project-list">
+                  {projects.map((project) => (
+                    <li key={project.id} className="project-card">
+                      <header>
+                        <span className="project-title">{project.name}</span>
+                        <span className="project-focus">{projectFocusLabel(project.focus)}</span>
+                      </header>
+                      <div className="progress-bar">
+                        <span style={{ width: `${Math.min(100, project.progress * 100)}%` }} />
+                      </div>
+                      <div className="project-meta">
+                        <span>Прогресс {Math.round(project.progress * 100)}%</span>
+                        {project.ownerAdvisorName ? (
+                          <span>Куратор: {project.ownerAdvisorName}</span>
+                        ) : null}
+                      </div>
+                      <p>{project.description}</p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="empty-state">Нет данных по текущему кварталу.</div>
+        )}
+      </section>
+
       <section className="section consultation-section">
         <div className="section-header">
           <h2 className="section-title">Консультации советников</h2>
@@ -520,11 +880,23 @@ export default function App() {
                 ) : (
                   <div className="empty-state">Дополнительных указаний нет.</div>
                 )}
-                <button type="button" className="handoff-button">
+                <button
+                  type="button"
+                  className="handoff-button"
+                  onClick={handleHandoff}
+                  disabled={!selectedConsultation || selectedConsultation.handoffIssued}
+                >
                   Передать исполнение
                 </button>
                 {selectedConsultation.handoffTarget ? (
                   <span className="handoff-meta">{selectedConsultation.handoffTarget}</span>
+                ) : null}
+                {selectedConsultation.handoffIssued ? (
+                  <span className="handoff-feedback">
+                    Передано {selectedConsultation.handedOffAt ? formatDate(selectedConsultation.handedOffAt) : "успешно"}
+                  </span>
+                ) : currentHandoff ? (
+                  <span className="handoff-feedback">{currentHandoff.message}</span>
                 ) : null}
               </div>
             </div>
@@ -536,6 +908,14 @@ export default function App() {
         <div className="section-header">
           <h2 className="section-title">Журнал управления</h2>
         </div>
+
+        {handoffLog.length > 0 ? (
+          <div className="handoff-history">
+            {handoffLog.slice(0, 3).map((entry) => (
+              <span key={`${entry.id}-${entry.timestamp}`}>{`${formatDate(entry.timestamp)} — ${entry.message}`}</span>
+            ))}
+          </div>
+        ) : null}
 
         {controlState.history.length === 0 ? (
           <div className="empty-state">Переключения режима не зафиксированы.</div>
@@ -592,6 +972,10 @@ export default function App() {
                 contextParts.push(`Сословие: ${entry.event.origin.estateName}`);
               }
               const eventConsultation = consultationsByEvent.get(entry.event.id);
+              const resolutionInfo = entry.resolutionMode
+                ? resolutionModeMeta[entry.resolutionMode]
+                : null;
+              const handoffInfo = entry.handoffIssued && entry.handoffTarget ? entry.handoffTarget : null;
               return (
                 <article
                   key={`${entry.event.id}-${entry.status}-${index}`}
@@ -608,6 +992,12 @@ export default function App() {
                     <span className="event-badge severity-pill">{entry.event.severity}</span>
                     {contextParts.length > 0 ? <span>{contextParts.join(" • ")}</span> : null}
                   </div>
+                  {resolutionInfo ? (
+                    <div className="event-resolution">
+                      <span className={resolutionInfo.className}>{resolutionInfo.label}</span>
+                      {handoffInfo ? <span className="handoff-note">Передано: {handoffInfo}</span> : null}
+                    </div>
+                  ) : null}
                   <p>{entry.event.description}</p>
                   {chosen ? <p>Выбор: {chosen}</p> : null}
                   {entry.appliedEffects.length > 0 ? (
@@ -626,13 +1016,41 @@ export default function App() {
 
       <section className="section">
         <div className="section-header">
+          <h2 className="section-title">Сословия</h2>
+        </div>
+
+        {estates.length === 0 ? (
+          <div className="empty-state">Нет данных о сословиях в выбранном квартале.</div>
+        ) : (
+          <div className="estate-grid">
+            {estates.map((estate) => (
+              <article key={estate.name} className="estate-card">
+                <h4>{estate.name}</h4>
+                <div className="estate-metric">
+                  <span>Удовлетворённость</span>
+                  <span>{formatPercent(estate.satisfaction)}</span>
+                </div>
+                <div className="estate-metric">
+                  <span>Влияние</span>
+                  <span>{formatNumber(estate.influence, 1)}</span>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
+      </section>
+
+     <section className="section">
+        <div className="section-header">
           <h2 className="section-title">Регионы</h2>
         </div>
 
-        {reportForQuarter ? (
+        {regions.length === 0 ? (
+          <div className="empty-state">Нет данных по регионам.</div>
+        ) : (
           <div className="region-grid">
-            {reportForQuarter.regions.map((region) => (
-              <article key={region.name} className="region-card">
+            {regions.map((region) => (
+              <article key={region.name} className={`region-card region-${region.riskLevel}`}>
                 <h4>{region.name}</h4>
                 <div className="region-metric">
                   <span>Богатство</span>
@@ -646,11 +1064,15 @@ export default function App() {
                   <span>Инфраструктура</span>
                   <span>{formatNumber(region.infrastructure, 1)}</span>
                 </div>
+                <div className="region-risk">
+                  <span className={riskClassMap[region.riskLevel]}>
+                    {riskLabels[region.riskLevel]}
+                  </span>
+                  <span className="region-risk-factors">{region.riskFactors.join(" • ")}</span>
+                </div>
               </article>
             ))}
           </div>
-        ) : (
-          <div className="empty-state">Нет данных по регионам.</div>
         )}
       </section>
     </div>

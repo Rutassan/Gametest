@@ -11,6 +11,7 @@ import {
   DEPARTMENTS,
   Department,
   DepartmentState,
+  DepartmentQuarterSnapshot,
   Estate,
   EventDecisionContext,
   EventDecisionStrategy,
@@ -48,6 +49,7 @@ import {
   StrategicPriorityLevel,
   StrategicPlanState,
   StrategicProject,
+  StrategicProjectSnapshot,
   ThreatLevel,
   TrustLevels,
   ResponsePostureMode,
@@ -1138,6 +1140,7 @@ function resolveEventsForQuarter(
         advisorNotes: advisorPreview.notes,
         remainingTime: active.remainingTime,
         timestamp: new Date().toISOString(),
+        handoffIssued: false,
       };
       interventionLog?.push(logEntry);
       interventionHandler.record?.(logEntry);
@@ -1153,6 +1156,7 @@ function resolveEventsForQuarter(
         advisorNotes: advisorPreview.notes,
         remainingTime: active.remainingTime,
         timestamp: new Date().toISOString(),
+        handoffIssued: false,
       };
       interventionLog?.push(logEntry);
     }
@@ -1167,6 +1171,7 @@ function resolveEventsForQuarter(
         notes: resolution.notes,
         resolutionMode,
         advisorPreview,
+        handoffIssued: false,
       });
 
       if (active.remainingTime <= 0) {
@@ -1182,6 +1187,7 @@ function resolveEventsForQuarter(
           notes: "Провал из-за истечения времени",
           resolutionMode,
           advisorPreview,
+          handoffIssued: false,
         });
         adjustAdvisorTrust(trust, -severityWeight(active.event));
         adjustEstateTrust(trust, active.event.origin?.estateName, -0.03);
@@ -1202,6 +1208,7 @@ function resolveEventsForQuarter(
         notes: !option ? "Опция не найдена" : "Недостаточно ресурсов для выбранной опции",
         resolutionMode,
         advisorPreview,
+        handoffIssued: false,
       });
 
       if (active.remainingTime <= 0) {
@@ -1217,6 +1224,7 @@ function resolveEventsForQuarter(
           notes: "Провал из-за истечения времени",
           resolutionMode,
           advisorPreview,
+          handoffIssued: false,
         });
         adjustAdvisorTrust(trust, -severityWeight(active.event));
         adjustEstateTrust(trust, active.event.origin?.estateName, -0.035);
@@ -1275,6 +1283,7 @@ function resolveEventsForQuarter(
       notes: resolution.notes,
       resolutionMode,
       advisorPreview,
+      handoffIssued: false,
     });
 
     adjustAdvisorTrust(trust, severityWeight(active.event));
@@ -1601,12 +1610,111 @@ function snapshotEstates(estates: Estate[]) {
   }));
 }
 
-function snapshotRegions(regions: Region[]) {
+function classifyRiskLevel(score: number): ThreatLevel {
+  if (score >= 0.66) {
+    return "critical";
+  }
+  if (score >= 0.33) {
+    return "moderate";
+  }
+  return "low";
+}
+
+function evaluateRegionRisk(region: Region, modifiers: GlobalModifiers) {
+  const loyaltyPenalty = clamp((70 - region.loyalty) / 40, 0, 1);
+  const wealthPenalty = clamp((160 - region.wealth) / 120, 0, 1);
+  const infrastructurePenalty = clamp((60 - region.infrastructure) / 45, 0, 1);
+  const globalThreatPenalty = clamp(modifiers.threat / 4, 0, 1);
+  const securityPressurePenalty = clamp(modifiers.securityPressure / 5, 0, 1);
+
+  const score = Number(
+    Math.min(
+      1,
+      loyaltyPenalty * 0.4 +
+        wealthPenalty * 0.15 +
+        infrastructurePenalty * 0.15 +
+        globalThreatPenalty * 0.15 +
+        securityPressurePenalty * 0.15
+    ).toFixed(3)
+  );
+  const level = classifyRiskLevel(score);
+
+  const factors: string[] = [];
+  if (loyaltyPenalty >= 0.25) {
+    factors.push("Низкая лояльность");
+  }
+  if (wealthPenalty >= 0.25) {
+    factors.push("Замедление экономики");
+  }
+  if (infrastructurePenalty >= 0.25) {
+    factors.push("Слабая инфраструктура");
+  }
+  if (globalThreatPenalty >= 0.3) {
+    factors.push("Рост внешней угрозы");
+  }
+  if (securityPressurePenalty >= 0.3) {
+    factors.push("Давление безопасности");
+  }
+  if (factors.length === 0) {
+    factors.push("Ситуация стабильна");
+  }
+
+  return { score, level, factors };
+}
+
+function snapshotRegions(regions: Region[], modifiers: GlobalModifiers) {
   return regions.map((region) => ({
     name: region.name,
     wealth: Number(region.wealth.toFixed(1)),
     loyalty: Number(region.loyalty.toFixed(1)),
     infrastructure: Number(region.infrastructure.toFixed(1)),
+    ...(() => {
+      const risk = evaluateRegionRisk(region, modifiers);
+      return {
+        riskScore: risk.score,
+        riskLevel: risk.level,
+        riskFactors: risk.factors,
+      };
+    })(),
+  }));
+}
+
+function snapshotDepartments(
+  departments: DepartmentState[],
+  expenses: QuarterlyExpenses,
+  plan: StrategicPlanState
+): DepartmentQuarterSnapshot[] {
+  const total = Math.max(1, expenses.total);
+  return departments.map((department) => ({
+    name: department.name,
+    efficiency: Number(department.efficiency.toFixed(3)),
+    budget: Number(department.budget.toFixed(2)),
+    cumulativeInvestment: Number(department.cumulativeInvestment.toFixed(2)),
+    spendingShare: Number((expenses.departments[department.name] / total).toFixed(3)),
+    agendaPriority: plan.priorities[department.name],
+  }));
+}
+
+function snapshotProjects(
+  projects: StrategicProject[],
+  council: CouncilMemberState[]
+): StrategicProjectSnapshot[] {
+  const advisorMap = new Map<string, string>();
+  for (const member of council) {
+    advisorMap.set(member.id, member.name);
+  }
+
+  return projects.map((project) => ({
+    id: project.id,
+    name: project.name,
+    focus: project.focus,
+    description: project.description,
+    milestones: [...project.milestones],
+    progress: Number(project.progress.toFixed(3)),
+    ownerAdvisorId: project.ownerAdvisorId,
+    ownerAdvisorName: project.ownerAdvisorId
+      ? advisorMap.get(project.ownerAdvisorId)
+      : undefined,
   }));
 }
 
@@ -1853,6 +1961,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
           selectedOptionId: null,
           appliedEffects: [],
           notes: "Сформировано системой раннего предупреждения",
+          handoffIssued: false,
         });
       }
     }
@@ -1914,13 +2023,15 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
         labor: Number(resources.labor.toFixed(2)),
       },
       estates: snapshotEstates(estates),
-      regions: snapshotRegions(regions),
+      regions: snapshotRegions(regions, modifiers),
+      departments: snapshotDepartments(departments, expenses, planState),
       events: quarterEvents,
       kpis,
       trust: trustSnapshot,
       activeThreatLevel: Number(modifiers.threat.toFixed(2)),
       councilReports,
       mandateProgress: mandateReports,
+      projects: snapshotProjects(planState.projects, councilState),
       agendaHighlights,
       advisorConsultations,
       controlMode: controlRuntime.currentMode,

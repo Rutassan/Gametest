@@ -107,6 +107,10 @@ export interface StrategicProject {
   ownerAdvisorId?: string;
 }
 
+export interface StrategicProjectSnapshot extends StrategicProject {
+  ownerAdvisorName?: string;
+}
+
 export interface StrategicAgenda {
   name: string;
   priorities: Partial<Record<Department, StrategicPriorityLevel>>;
@@ -322,6 +326,9 @@ export interface AdvisorConsultationThread {
   responses: AdvisorConsultationResponse[];
   recommendations: string[];
   handoffTarget?: string;
+  handoffIssued?: boolean;
+  handedOffAt?: string;
+  handoffNotes?: string;
   relatedKpi?: keyof KPIReport;
   relatedEventId?: string;
   relatedDepartment?: Department;
@@ -348,6 +355,18 @@ export interface RegionSnapshot {
   wealth: number;
   loyalty: number;
   infrastructure: number;
+  riskScore: number;
+  riskLevel: ThreatLevel;
+  riskFactors: string[];
+}
+
+export interface DepartmentQuarterSnapshot {
+  name: Department;
+  efficiency: number;
+  budget: number;
+  cumulativeInvestment: number;
+  spendingShare: number;
+  agendaPriority: StrategicPriorityLevel;
 }
 
 export type ThreatLevel = "low" | "moderate" | "critical";
@@ -434,6 +453,10 @@ export interface EventInterventionLogEntry {
   advisorNotes?: string;
   remainingTime: number;
   timestamp: string;
+  handoffTarget?: string;
+  handoffIssued?: boolean;
+  handoffNotes?: string;
+  handledBy?: string;
 }
 
 export interface EventInterventionHandler {
@@ -454,6 +477,10 @@ export interface EventOutcome {
   notes?: string;
   resolutionMode?: InterventionDecisionMode;
   advisorPreview?: AdvisorOutcomePreview;
+  handoffTarget?: string;
+  handoffIssued?: boolean;
+  handedOffAt?: string;
+  handledBy?: string;
 }
 
 export interface ActiveEvent {
@@ -470,12 +497,14 @@ export interface QuarterlyReport {
   treasury: ResourcePool;
   estates: EstateSnapshot[];
   regions: RegionSnapshot[];
+  departments: DepartmentQuarterSnapshot[];
   events: EventOutcome[];
   kpis: KPIReport;
   trust: TrustLevels;
   activeThreatLevel: number;
   councilReports: CouncilReport[];
   mandateProgress: MandateProgressReport[];
+  projects: StrategicProjectSnapshot[];
   agendaHighlights: AgendaHighlight[];
   advisorConsultations: AdvisorConsultationThread[];
   controlMode: CampaignControlMode;

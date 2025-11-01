@@ -54,10 +54,12 @@ describe("Event intervention flow", () => {
     const outcome = reportWithManual!.events.find((event) => event.notes === "test-manual-choice");
     expect(outcome?.resolutionMode).toBe("player");
     expect(outcome?.advisorPreview).toBeDefined();
+    expect(outcome?.handoffIssued).toBe(false);
 
     expect(result.reports[0]?.controlMode).toBe("advisor");
     expect(result.controlState.currentMode).toBe("advisor");
     expect(result.finalState.controlMode).toBe("advisor");
     expect(result.controlState.history.length).toBeGreaterThan(0);
+    expect(manualEntry?.handoffIssued).toBe(false);
   });
 });

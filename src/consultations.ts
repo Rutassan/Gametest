@@ -267,6 +267,7 @@ function buildKpiThread(context: EventDecisionContext): AdvisorConsultationThrea
     responses,
     recommendations: uniqueStrings(responses.map((response) => response.recommendedAction)),
     handoffTarget: `Координационный штаб: ${DEPARTMENT_LABELS[focus.meta.department]}`,
+    handoffIssued: false,
     relatedKpi: focus.key,
     relatedDepartment: focus.meta.department,
   };
@@ -353,6 +354,7 @@ function buildEventThread(
       relatedDepartment !== null
         ? `Передать исполнение: ${DEPARTMENT_LABELS[relatedDepartment]}`
         : focus.event.origin?.regionName,
+    handoffIssued: false,
     relatedEventId: focus.event.id,
     relatedDepartment: relatedDepartment ?? undefined,
   };
@@ -415,6 +417,7 @@ function buildDepartmentThread(context: EventDecisionContext): AdvisorConsultati
     responses,
     recommendations: uniqueStrings(responses.map((response) => response.recommendedAction)),
     handoffTarget: `Передать исполнение: ${DEPARTMENT_LABELS[focus.name]}`,
+    handoffIssued: false,
     relatedDepartment: focus.name,
   };
 }

@@ -180,7 +180,26 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
   const timelineRaw = readFileSync(join(directory, manifest.files.timeline), "utf-8")
     .split("\n")
     .filter(Boolean)
-    .map((line) => JSON.parse(line) as QuarterlyReport);
+    .map((line) => {
+      const report = JSON.parse(line) as QuarterlyReport;
+      report.departments = report.departments ?? [];
+      report.projects = report.projects ?? [];
+      report.regions = report.regions.map((region) => ({
+        ...region,
+        riskScore: region.riskScore ?? 0,
+        riskLevel: region.riskLevel ?? "low",
+        riskFactors: region.riskFactors ?? ["Данные недоступны"],
+      }));
+      report.events = report.events.map((event) => ({
+        ...event,
+        handoffIssued: event.handoffIssued ?? false,
+      }));
+      report.advisorConsultations = (report.advisorConsultations ?? []).map((thread) => ({
+        ...thread,
+        handoffIssued: thread.handoffIssued ?? false,
+      }));
+      return report;
+    });
 
   const historyFallback =
     summary.controlState?.history ?? manifest.controlState?.history ?? [];
@@ -192,7 +211,10 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
       kpiSummary: manifest.kpiSummary,
       totals: manifest.totals,
       finalState: summary.finalState,
-      interventionLog: summary.interventions ?? [],
+      interventionLog: (summary.interventions ?? []).map((entry) => ({
+        ...entry,
+        handoffIssued: entry.handoffIssued ?? false,
+      })),
       controlState:
         summary.controlState ??
         manifest.controlState ?? {
