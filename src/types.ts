@@ -363,6 +363,34 @@ export type EventDecisionStrategy = (
 
 export type InterventionDecisionMode = "player" | "council";
 
+export type CampaignControlMode = "manual" | "advisor" | "hybrid";
+
+export interface ControlModeTransition {
+  quarter: number;
+  mode: CampaignControlMode;
+  triggeredBy?: string;
+  reason?: string;
+}
+
+export interface ControlModeLogEntry {
+  quarter: number;
+  mode: CampaignControlMode;
+  timestamp: string;
+  triggeredBy?: string;
+  reason?: string;
+}
+
+export interface CampaignControlSettings {
+  initialMode: CampaignControlMode;
+  strategies?: Partial<Record<CampaignControlMode, EventDecisionStrategy>>;
+  transitions?: ControlModeTransition[];
+}
+
+export interface CampaignControlState {
+  currentMode: CampaignControlMode;
+  history: ControlModeLogEntry[];
+}
+
 export interface EventInterventionDecision extends EventResolution {
   mode: InterventionDecisionMode;
 }
@@ -421,6 +449,7 @@ export interface QuarterlyReport {
   councilReports: CouncilReport[];
   mandateProgress: MandateProgressReport[];
   agendaHighlights: AgendaHighlight[];
+  controlMode: CampaignControlMode;
 }
 
 export interface SimulationConfig {
@@ -441,6 +470,7 @@ export interface SimulationConfig {
   agenda: StrategicAgenda;
   council: CouncilMember[];
   responsePosture: ResponsePostureSettings;
+  controlSettings?: CampaignControlSettings;
 }
 
 export interface KPIAverages {
@@ -469,6 +499,8 @@ export interface SimulationResult {
     activeThreatLevel: number;
     council: CouncilMemberState[];
     plan: StrategicPlanState;
+    controlMode: CampaignControlMode;
   };
   interventionLog: EventInterventionLogEntry[];
+  controlState: CampaignControlState;
 }

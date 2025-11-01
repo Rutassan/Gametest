@@ -41,5 +41,10 @@ describe("Persistence pipeline", () => {
       2
     );
     expect(loaded.result.interventionLog.length).toBe(result.interventionLog.length);
+    expect(result.controlState.history.length).toBeGreaterThan(0);
+    expect(result.finalState.controlMode).toBe(result.controlState.currentMode);
+    expect(loaded.result.controlState.currentMode).toBe(result.controlState.currentMode);
+    expect(loaded.result.controlState.history.length).toBeGreaterThan(0);
+    expect(loaded.manifest.finalSnapshot.controlMode).toBe(result.finalState.controlMode);
   });
 });

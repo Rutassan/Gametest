@@ -2,6 +2,8 @@ import { buildBaselineConfig } from "./config";
 import { runSimulation } from "./simulation";
 import {
   AgendaHighlight,
+  CampaignControlMode,
+  ControlModeLogEntry,
   CouncilReport,
   KPIEntry,
   KPIReport,
@@ -44,6 +46,31 @@ function describeResolutionMode(mode: InterventionDecisionMode | undefined): str
     default:
       return "Авто";
   }
+}
+
+function describeControlMode(mode: CampaignControlMode): string {
+  switch (mode) {
+    case "manual":
+      return "🎯 ручной";
+    case "hybrid":
+      return "♟ гибрид";
+    case "advisor":
+    default:
+      return "🧠 совет";
+  }
+}
+
+function formatControlLogEntry(entry: ControlModeLogEntry): string {
+  const time = new Date(entry.timestamp);
+  const timeLabel = Number.isNaN(time.getTime())
+    ? entry.timestamp
+    : new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "short",
+        timeStyle: "short",
+      }).format(time);
+  const reason = entry.reason ? ` — ${entry.reason}` : "";
+  const triggered = entry.triggeredBy ? ` (${entry.triggeredBy})` : "";
+  return `Q${entry.quarter}: ${describeControlMode(entry.mode)}${reason}${triggered} — ${timeLabel}`;
 }
 
 function formatTrend(trend: number): string {
@@ -147,9 +174,18 @@ const saveInfo = saveSimulationResult(result, {
   label: "baseline_cli_run",
 });
 
+console.log(`Режим кампании: ${describeControlMode(result.controlState.currentMode)}`);
+if (result.controlState.history.length > 0) {
+  console.log("Журнал переключений режима:");
+  for (const entry of result.controlState.history) {
+    console.log(` • ${formatControlLogEntry(entry)}`);
+  }
+}
+
 console.log("=== Ежеквартальный отчёт ===");
 for (const report of result.reports) {
   console.log(`\nКвартал ${report.quarter}`);
+  console.log(`Режим управления: ${describeControlMode(report.controlMode)}`);
   console.log(
     `Доходы: золото ${report.incomes.gold.toFixed(1)}, влияние ${report.incomes.influence.toFixed(1)}, рабочая сила ${report.incomes.labor.toFixed(1)}`
   );

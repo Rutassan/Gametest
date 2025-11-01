@@ -1,10 +1,15 @@
 import { ReformistScholar } from "./advisors";
 import { councilMembers, departments, estates, initialResources, regions, strategicAgenda } from "./data";
 import { SimulationConfig, StrategicAgenda, CouncilMember, ResponsePostureSettings } from "./types";
-import { pragmaticDecisionStrategy } from "./strategies";
+import {
+  hybridControlDecisionStrategy,
+  manualControlDecisionStrategy,
+  pragmaticDecisionStrategy,
+} from "./strategies";
 
 export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): SimulationConfig {
   const advisor = overrides.advisor ?? new ReformistScholar();
+  const advisorStrategy = overrides.eventDecisionStrategy ?? pragmaticDecisionStrategy;
   const decree = overrides.decree ?? {
     name: "Программа обновления инфраструктуры",
     investmentPriority: "infrastructure" as const,
@@ -45,10 +50,21 @@ export function buildBaselineConfig(overrides: Partial<SimulationConfig> = {}): 
     advisor,
     decree,
     initialTrust: overrides.initialTrust,
-    eventDecisionStrategy: overrides.eventDecisionStrategy ?? pragmaticDecisionStrategy,
+    eventDecisionStrategy: advisorStrategy,
     eventInterventionHandler: overrides.eventInterventionHandler,
     agenda: baseAgenda,
     council: baseCouncil,
     responsePosture: defaultPosture,
+    controlSettings: {
+      initialMode: overrides.controlSettings?.initialMode ?? "advisor",
+      transitions: overrides.controlSettings?.transitions?.map((entry) => ({ ...entry })),
+      strategies: {
+        manual:
+          overrides.controlSettings?.strategies?.manual ?? manualControlDecisionStrategy,
+        advisor: overrides.controlSettings?.strategies?.advisor ?? advisorStrategy,
+        hybrid:
+          overrides.controlSettings?.strategies?.hybrid ?? hybridControlDecisionStrategy,
+      },
+    },
   };
 }

@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type {
+  CampaignControlMode,
+  ControlModeLogEntry,
   DashboardPayload,
   EventOutcome,
   EventOutcomeStatus,
@@ -37,6 +39,27 @@ const threatClass: Record<ThreatLevel, string> = {
   low: "threat-pill threat-low",
   moderate: "threat-pill threat-moderate",
   critical: "threat-pill threat-critical",
+};
+
+const controlModeLabels: Record<CampaignControlMode, { label: string; description: string; badgeClass: string; toneClass: string }> = {
+  manual: {
+    label: "Ручной",
+    description: "Игрок подтверждает решения",
+    badgeClass: "control-pill manual",
+    toneClass: "manual",
+  },
+  advisor: {
+    label: "Совет",
+    description: "Советник действует автономно",
+    badgeClass: "control-pill advisor",
+    toneClass: "advisor",
+  },
+  hybrid: {
+    label: "Гибрид",
+    description: "Критичные кейсы требуют подтверждения",
+    badgeClass: "control-pill hybrid",
+    toneClass: "hybrid",
+  },
 };
 
 function formatDate(iso: string): string {
@@ -89,6 +112,28 @@ function findChosenOption(outcome: EventOutcome): string | null {
     (entry) => entry.id === outcome.selectedOptionId
   );
   return option?.description ?? outcome.selectedOptionId ?? null;
+}
+
+function formatControlLogEntry(entry: ControlModeLogEntry): { title: string; details: string } {
+  const modeInfo = controlModeLabels[entry.mode];
+  const time = new Date(entry.timestamp);
+  const timestamp = Number.isNaN(time.getTime())
+    ? entry.timestamp
+    : new Intl.DateTimeFormat("ru-RU", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      }).format(time);
+  const parts: string[] = [timestamp];
+  if (entry.reason) {
+    parts.push(entry.reason);
+  }
+  if (entry.triggeredBy) {
+    parts.push(`Источник: ${entry.triggeredBy}`);
+  }
+  return {
+    title: `Q${entry.quarter} • ${modeInfo.label}`,
+    details: parts.join(" • "),
+  };
 }
 
 function useSimulationData() {
@@ -189,6 +234,8 @@ export default function App() {
 
   const averages = simulation.kpiSummary.averages;
   const finalState = simulation.finalState;
+  const controlState = simulation.controlState;
+  const controlInfo = controlModeLabels[controlState.currentMode];
 
   const kpiEntries: Array<{ key: keyof KPIEntry; label: string; data: KPIEntry }> =
     reportForQuarter
@@ -263,6 +310,11 @@ export default function App() {
               Рост {averages.economicGrowth.toFixed(1)} • Безопасность {averages.securityIndex.toFixed(1)}
             </span>
           </article>
+          <article className="metric-card control-mode-card">
+            <h3>Режим кампании</h3>
+            <span className={`value ${controlInfo.badgeClass}`}>{controlInfo.label}</span>
+            <span className="subtitle">{controlInfo.description}</span>
+          </article>
         </div>
       </header>
 
@@ -334,6 +386,32 @@ export default function App() {
           </>
         ) : (
           <div className="empty-state">Нет данных по выбранному кварталу.</div>
+        )}
+      </section>
+
+      <section className="section">
+        <div className="section-header">
+          <h2 className="section-title">Журнал управления</h2>
+        </div>
+
+        {controlState.history.length === 0 ? (
+          <div className="empty-state">Переключения режима не зафиксированы.</div>
+        ) : (
+          <ul className="control-log">
+            {controlState.history.map((entry) => {
+              const formatted = formatControlLogEntry(entry);
+              const modeClass = controlModeLabels[entry.mode].toneClass;
+              return (
+                <li
+                  key={`${entry.quarter}-${entry.timestamp}`}
+                  className={`control-log-entry ${modeClass}`}
+                >
+                  <span className="log-title">{formatted.title}</span>
+                  <span className="log-details">{formatted.details}</span>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
 
