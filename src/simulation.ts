@@ -20,6 +20,11 @@ import {
   EventOutcome,
   EventResolution,
   InterventionDecisionMode,
+  CampaignControlMode,
+  CampaignControlSettings,
+  CampaignControlState,
+  ControlModeLogEntry,
+  ControlModeTransition,
   KPIEntry,
   KPIReport,
   MandateProgressReport,
@@ -64,6 +69,10 @@ import {
   taxLoyaltyModifier,
   taxSatisfactionDelta,
 } from "./decrees";
+import {
+  hybridControlDecisionStrategy,
+  manualControlDecisionStrategy,
+} from "./strategies";
 
 const QUARTER_DURATION = 3;
 const SECURITY_ESCALATION_THRESHOLDS = [0.8, 2.6, 4.2];
@@ -1277,6 +1286,95 @@ function resolveEventsForQuarter(
   return outcomes;
 }
 
+interface ControlRuntimeState {
+  currentMode: CampaignControlMode;
+  currentStrategy: EventDecisionStrategy;
+  strategies: Record<CampaignControlMode, EventDecisionStrategy>;
+  pendingTransitions: ControlModeTransition[];
+  history: ControlModeLogEntry[];
+}
+
+function buildControlStrategies(
+  settings: CampaignControlSettings | undefined,
+  fallback: EventDecisionStrategy
+): Record<CampaignControlMode, EventDecisionStrategy> {
+  return {
+    manual: settings?.strategies?.manual ?? manualControlDecisionStrategy,
+    advisor: settings?.strategies?.advisor ?? fallback,
+    hybrid: settings?.strategies?.hybrid ?? hybridControlDecisionStrategy,
+  };
+}
+
+function initializeControlRuntimeState(
+  settings: CampaignControlSettings | undefined,
+  fallback: EventDecisionStrategy
+): ControlRuntimeState {
+  const strategies = buildControlStrategies(settings, fallback);
+  const initialMode: CampaignControlMode = settings?.initialMode ?? "advisor";
+  const pendingTransitions = [...(settings?.transitions ?? [])]
+    .map((transition) => ({ ...transition }))
+    .sort((a, b) => a.quarter - b.quarter);
+
+  return {
+    currentMode: initialMode,
+    currentStrategy: strategies[initialMode] ?? fallback,
+    strategies,
+    pendingTransitions,
+    history: [],
+  };
+}
+
+function logControlModeChange(
+  state: ControlRuntimeState,
+  quarter: number,
+  reason?: string,
+  triggeredBy?: string
+): ControlModeLogEntry {
+  const entry: ControlModeLogEntry = {
+    quarter,
+    mode: state.currentMode,
+    timestamp: new Date().toISOString(),
+    reason,
+    triggeredBy,
+  };
+  state.history.push(entry);
+  return entry;
+}
+
+function setControlMode(
+  state: ControlRuntimeState,
+  mode: CampaignControlMode,
+  quarter: number,
+  reason?: string,
+  triggeredBy?: string
+) {
+  if (state.currentMode === mode) {
+    return false;
+  }
+
+  state.currentMode = mode;
+  state.currentStrategy = state.strategies[mode] ?? state.currentStrategy;
+  logControlModeChange(state, quarter, reason, triggeredBy);
+  return true;
+}
+
+function applyScheduledTransitions(state: ControlRuntimeState, quarter: number) {
+  if (state.pendingTransitions.length === 0) {
+    return;
+  }
+
+  while (state.pendingTransitions.length > 0 && state.pendingTransitions[0].quarter <= quarter) {
+    const transition = state.pendingTransitions.shift()!;
+    setControlMode(
+      state,
+      transition.mode,
+      quarter,
+      transition.reason,
+      transition.triggeredBy ?? "расписание"
+    );
+  }
+}
+
 type KPIMetric = keyof KPIReport;
 
 function determineThreatLevel(metric: KPIMetric, value: number): ThreatLevel {
@@ -1558,10 +1656,18 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   let previousCrises: number | null = null;
   let latestKPI: KPIReport | null = null;
 
-  const decisionStrategy: EventDecisionStrategy =
+  const fallbackDecisionStrategy: EventDecisionStrategy =
     config.eventDecisionStrategy ?? defaultDecisionStrategy;
+  const controlRuntime = initializeControlRuntimeState(
+    config.controlSettings,
+    fallbackDecisionStrategy
+  );
+  if (config.quarters > 0) {
+    logControlModeChange(controlRuntime, 1, "Стартовый режим кампании", "initial");
+  }
 
   for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
+    applyScheduledTransitions(controlRuntime, quarter);
     applyTimedEffects(timedEffects, resources, regions, estates, modifiers);
 
     const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
@@ -1678,7 +1784,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       quarter,
       activeEvents,
       generatedEvents,
-      decisionStrategy,
+      controlRuntime.currentStrategy,
       () => ({
         quarter,
         resources: { ...resources },
@@ -1802,6 +1908,7 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       councilReports,
       mandateProgress: mandateReports,
       agendaHighlights,
+      controlMode: controlRuntime.currentMode,
     });
 
     modifiers.stability = Number((modifiers.stability * 0.85).toFixed(2));
@@ -1868,7 +1975,12 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       activeThreatLevel: Number(modifiers.threat.toFixed(2)),
       council: cloneCouncilState(councilState),
       plan: cloneStrategicPlan(planState),
+      controlMode: controlRuntime.currentMode,
     },
     interventionLog: interventionLog.map((entry) => ({ ...entry })),
+    controlState: {
+      currentMode: controlRuntime.currentMode,
+      history: controlRuntime.history.map((entry) => ({ ...entry })),
+    },
   };
 }

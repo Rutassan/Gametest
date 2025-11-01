@@ -1,6 +1,9 @@
 import { mkdirSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
 import {
+  CampaignControlMode,
+  CampaignControlState,
+  ControlModeTransition,
   EventInterventionLogEntry,
   QuarterlyReport,
   SimulationConfig,
@@ -16,6 +19,10 @@ export interface ConfigSummary {
   agenda: SimulationConfig["agenda"];
   council: SimulationConfig["council"];
   responsePosture: SimulationConfig["responsePosture"];
+  controlMode?: {
+    initialMode: CampaignControlMode;
+    transitions?: ControlModeTransition[];
+  };
 }
 
 export interface SimulationSaveManifest {
@@ -32,9 +39,11 @@ export interface SimulationSaveManifest {
     treasury: SimulationResult["finalState"]["resources"];
     trust: SimulationResult["finalState"]["trust"]["advisor"];
     threatLevel: SimulationResult["finalState"]["activeThreatLevel"];
+    controlMode: SimulationResult["finalState"]["controlMode"];
   };
   totals: SimulationResult["totals"];
   kpiSummary: SimulationResult["kpiSummary"];
+  controlState?: CampaignControlState;
 }
 
 export interface SaveOptions {
@@ -57,6 +66,7 @@ interface SummaryFile {
   reports: QuarterlyReport[];
   finalState: SimulationResult["finalState"];
   interventions: EventInterventionLogEntry[];
+  controlState: CampaignControlState;
 }
 
 function ensureDirectory(path: string) {
@@ -84,6 +94,12 @@ function buildConfigSummary(config: SimulationConfig | undefined): ConfigSummary
       default: config.responsePosture.default,
       perCategory: config.responsePosture.perCategory ? { ...config.responsePosture.perCategory } : undefined,
     },
+    controlMode: config.controlSettings
+      ? {
+          initialMode: config.controlSettings.initialMode,
+          transitions: config.controlSettings.transitions?.map((transition) => ({ ...transition })),
+        }
+      : undefined,
   };
 }
 
@@ -114,9 +130,11 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
       treasury: result.finalState.resources,
       trust: result.finalState.trust.advisor,
       threatLevel: result.finalState.activeThreatLevel,
+      controlMode: result.finalState.controlMode,
     },
     totals: result.totals,
     kpiSummary: result.kpiSummary,
+    controlState: result.controlState,
   };
 
   const timelinePath = join(saveDirectory, manifest.files.timeline);
@@ -131,6 +149,7 @@ export function saveSimulationResult(result: SimulationResult, options: SaveOpti
     reports: result.reports,
     finalState: result.finalState,
     interventions: result.interventionLog,
+    controlState: result.controlState,
   };
   writeFileSync(summaryPath, JSON.stringify(summaryPayload, null, 2), "utf-8");
   writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf-8");
@@ -163,6 +182,9 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
     .filter(Boolean)
     .map((line) => JSON.parse(line) as QuarterlyReport);
 
+  const historyFallback =
+    summary.controlState?.history ?? manifest.controlState?.history ?? [];
+
   return {
     manifest,
     result: {
@@ -171,6 +193,12 @@ export function loadSimulationSave(pathToSave: string): LoadedSimulationSave {
       totals: manifest.totals,
       finalState: summary.finalState,
       interventionLog: summary.interventions ?? [],
+      controlState:
+        summary.controlState ??
+        manifest.controlState ?? {
+          currentMode: summary.finalState.controlMode,
+          history: historyFallback,
+        },
     },
   };
 }

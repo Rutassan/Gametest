@@ -315,3 +315,39 @@ export const pragmaticDecisionStrategy: EventDecisionStrategy = (event, context)
 
   return { optionId: top.option.id };
 };
+
+export const manualControlDecisionStrategy: EventDecisionStrategy = (event, context) => {
+  const base = pragmaticDecisionStrategy(event, context);
+  if (base.optionId) {
+    return {
+      optionId: base.optionId,
+      defer: true,
+      notes: base.notes ?? "Ручной режим: совет предлагает вариант и ждёт подтверждения правителя",
+    };
+  }
+  return {
+    optionId: null,
+    defer: true,
+    notes: base.notes ?? "Ручной режим: требуется решение правителя",
+  };
+};
+
+export const hybridControlDecisionStrategy: EventDecisionStrategy = (event, context) => {
+  const base = pragmaticDecisionStrategy(event, context);
+  const requiresManual =
+    event.severity === "major" ||
+    (context.trust.advisor < 0.6 && event.severity !== "minor") ||
+    base.optionId === null;
+
+  if (requiresManual) {
+    return {
+      optionId: base.optionId,
+      defer: true,
+      notes:
+        base.notes ??
+        "Гибридный режим: критичное событие передано правителю для утверждения",
+    };
+  }
+
+  return base;
+};

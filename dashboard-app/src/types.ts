@@ -1,6 +1,7 @@
 export type ThreatLevel = "low" | "moderate" | "critical";
 export type EventSeverity = "minor" | "moderate" | "major";
 export type EventOutcomeStatus = "resolved" | "failed" | "deferred";
+export type CampaignControlMode = "manual" | "advisor" | "hybrid";
 
 export interface ResourcePool {
   gold: number;
@@ -93,6 +94,19 @@ export interface EventOutcome {
   notes?: string;
 }
 
+export interface ControlModeLogEntry {
+  quarter: number;
+  mode: CampaignControlMode;
+  timestamp: string;
+  reason?: string;
+  triggeredBy?: string;
+}
+
+export interface ControlStateSnapshot {
+  currentMode: CampaignControlMode;
+  history: ControlModeLogEntry[];
+}
+
 export interface TrustLevels {
   advisor: number;
   estates: Record<string, number>;
@@ -109,6 +123,7 @@ export interface QuarterlyReport {
   kpis: KPIReport;
   trust: TrustLevels;
   activeThreatLevel: number;
+  controlMode: CampaignControlMode;
 }
 
 export interface SimulationTotals {
@@ -123,6 +138,7 @@ export interface SimulationFinalState {
   departments: any[];
   trust: TrustLevels;
   activeThreatLevel: number;
+  controlMode: CampaignControlMode;
 }
 
 export interface SimulationConfigSummary {
@@ -134,6 +150,15 @@ export interface SimulationConfigSummary {
     name: string;
     investmentPriority: string;
     taxPolicy: string;
+  };
+  controlMode?: {
+    initialMode: CampaignControlMode;
+    transitions?: Array<{
+      quarter: number;
+      mode: CampaignControlMode;
+      reason?: string;
+      triggeredBy?: string;
+    }>;
   };
 }
 
@@ -150,6 +175,7 @@ export interface SimulationData {
   totals: SimulationTotals;
   finalState: SimulationFinalState;
   reports: QuarterlyReport[];
+  controlState: ControlStateSnapshot;
 }
 
 export interface DashboardPayload {
