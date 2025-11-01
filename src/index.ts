@@ -2,10 +2,13 @@ import { BalancedChancellor, MilitaristMarshal, ReformistScholar } from "./advis
 import { departments, estates, initialResources, regions } from "./data";
 import { runSimulation } from "./simulation";
 import {
+  KPIEntry,
+  KPIReport,
   SimulationConfig,
   SimulationEventCost,
   SimulationEventEffect,
   SimulationEventEscalation,
+  ThreatLevel,
 } from "./types";
 
 function formatCost(cost: SimulationEventCost | undefined): string {
@@ -47,6 +50,38 @@ function formatEscalations(escalations: SimulationEventEscalation[] | undefined)
     .join("; ");
 }
 
+function formatTrend(trend: number): string {
+  if (trend === 0) {
+    return "0";
+  }
+  const prefix = trend > 0 ? "+" : "";
+  const arrow = trend > 0 ? "↑" : "↓";
+  return `${arrow} ${prefix}${trend.toFixed(2)}`;
+}
+
+function describeThreat(level: ThreatLevel): string {
+  switch (level) {
+    case "critical":
+      return "⚠️ критично";
+    case "moderate":
+      return "⚠ умеренно";
+    default:
+      return "✅ стабильно";
+  }
+}
+
+function summarizeKPI(label: string, entry: KPIEntry): string {
+  return `${label}: ${entry.value.toFixed(2)} (${formatTrend(entry.trend)}, ${describeThreat(entry.threatLevel)})`;
+}
+
+function logKPIBlock(report: KPIReport) {
+  console.log("KPI:");
+  console.log(` • ${summarizeKPI("Стабильность", report.stability)}`);
+  console.log(` • ${summarizeKPI("Экономический рост", report.economicGrowth)}`);
+  console.log(` • ${summarizeKPI("Индекс безопасности", report.securityIndex)}`);
+  console.log(` • ${summarizeKPI("Активные кризисы", report.activeCrises)}`);
+}
+
 const advisor = new ReformistScholar();
 
 const decree = {
@@ -68,9 +103,9 @@ const config: SimulationConfig = {
 
 const result = runSimulation(config);
 
-console.log("=== Ежеквартальный отчёт ===");
+console.log("=== Ежемесячный отчёт ===");
 for (const report of result.reports) {
-  console.log(`\nКвартал ${report.quarter}`);
+  console.log(`\nМесяц ${report.month}`);
   console.log(
     `Доходы: золото ${report.incomes.gold.toFixed(1)}, влияние ${report.incomes.influence.toFixed(1)}, рабочая сила ${report.incomes.labor.toFixed(1)}`
   );
@@ -90,6 +125,7 @@ for (const report of result.reports) {
       .map((estate) => `${estate.name}: удовлетворённость ${estate.satisfaction}`)
       .join(", ")
   );
+  logKPIBlock(report.kpis);
   if (report.events.length > 0) {
     console.log("События:");
     for (const event of report.events) {
@@ -164,6 +200,18 @@ console.log(
   `Финальное состояние казны: золото ${result.finalState.resources.gold.toFixed(1)}, влияние ${result.finalState.resources.influence.toFixed(
     1
   )}, рабочая сила ${result.finalState.resources.labor.toFixed(1)}`
+);
+
+console.log("\nKPI-сводка за период:");
+if (result.kpiSummary.latest) {
+  logKPIBlock(result.kpiSummary.latest);
+}
+console.log(
+  `Средние значения: стабильность ${result.kpiSummary.averages.stability.toFixed(
+    2
+  )}, экономический рост ${result.kpiSummary.averages.economicGrowth.toFixed(2)}, индекс безопасности ${result.kpiSummary.averages.securityIndex.toFixed(
+    2
+  )}, активные кризисы ${result.kpiSummary.averages.activeCrises.toFixed(2)}`
 );
 
 console.log("\nИнфраструктура регионов к концу года:");

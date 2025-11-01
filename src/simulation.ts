@@ -5,8 +5,10 @@ import {
   Department,
   DepartmentState,
   Estate,
+  KPIEntry,
+  KPIReport,
+  MonthlyReport,
   QuarterlyExpenses,
-  QuarterReport,
   Region,
   ResourcePool,
   SimulationConfig,
@@ -14,6 +16,7 @@ import {
   TaxPolicy,
   SimulationEvent,
   SimulationResult,
+  ThreatLevel,
 } from "./types";
 import {
   createEstateDissatisfactionEvent,
@@ -61,6 +64,58 @@ function scaleResources(pool: ResourcePool, factor: number): ResourcePool {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.max(min, Math.min(max, value));
+}
+
+type KPIMetric = keyof KPIReport;
+
+function determineThreatLevel(metric: KPIMetric, value: number): ThreatLevel {
+  switch (metric) {
+    case "stability":
+      if (value < 50) {
+        return "critical";
+      }
+      if (value < 65) {
+        return "moderate";
+      }
+      return "low";
+    case "economicGrowth":
+      if (value < -8) {
+        return "critical";
+      }
+      if (value < 0) {
+        return "moderate";
+      }
+      return "low";
+    case "securityIndex":
+      if (value < 40) {
+        return "critical";
+      }
+      if (value < 60) {
+        return "moderate";
+      }
+      return "low";
+    case "activeCrises":
+      if (value >= 3) {
+        return "critical";
+      }
+      if (value >= 1) {
+        return "moderate";
+      }
+      return "low";
+    default:
+      return "low";
+  }
+}
+
+function createKPIEntry(
+  metric: KPIMetric,
+  value: number,
+  previous: number | null
+): KPIEntry {
+  const normalizedValue = Number(value.toFixed(2));
+  const trend = previous === null ? 0 : Number((value - previous).toFixed(2));
+  const threatLevel = determineThreatLevel(metric, normalizedValue);
+  return { value: normalizedValue, trend, threatLevel };
 }
 
 function calculateRegionIncome(
@@ -252,14 +307,20 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
   const estates: Estate[] = config.estates.map((estate) => ({ ...estate }));
   const departments: DepartmentState[] = config.departments.map((department) => ({ ...department }));
 
-  const reports: QuarterReport[] = [];
+  const reports: MonthlyReport[] = [];
   let totalIncomes: ResourcePool = { gold: 0, influence: 0, labor: 0 };
   let totalExpenses: QuarterlyExpenses = {
     departments: Object.fromEntries(DEPARTMENTS.map((department) => [department, 0])) as Record<Department, number>,
     total: 0,
   };
 
-  for (let quarter = 1; quarter <= config.quarters; quarter += 1) {
+  let previousTotalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
+  let previousStability: number | null = null;
+  let previousGrowth: number | null = null;
+  let previousSecurity: number | null = null;
+  let previousCrises: number | null = null;
+
+  for (let month = 1; month <= config.quarters; month += 1) {
     const decreeTaxModifier = taxIncomeModifier(config.decree.taxPolicy);
     const loyaltyModifier = taxLoyaltyModifier(config.decree.taxPolicy);
     const economyEfficiency = departments.find((d) => d.name === "economy")?.efficiency ?? 1;
@@ -358,8 +419,31 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       events.push(createTreasuryDepletionEvent(resources.gold));
     }
 
+    const averageLoyalty =
+      regions.reduce((acc, region) => acc + region.loyalty, 0) / regions.length;
+    const totalWealth = regions.reduce((acc, region) => acc + region.wealth, 0);
+    const economicGrowth = totalWealth - previousTotalWealth;
+    const militarySpend = spending.military ?? 0;
+    const militaryShare = (militarySpend / Math.max(1, config.baseQuarterBudget)) * 100;
+    const minLoyalty = Math.min(...regions.map((region) => region.loyalty));
+    const securityIndex = Math.min(minLoyalty, Math.min(100, militaryShare));
+    const activeCrises = events.filter((event) => event.severity !== "minor").length;
+
+    const kpis: KPIReport = {
+      stability: createKPIEntry("stability", averageLoyalty, previousStability),
+      economicGrowth: createKPIEntry("economicGrowth", economicGrowth, previousGrowth),
+      securityIndex: createKPIEntry("securityIndex", securityIndex, previousSecurity),
+      activeCrises: createKPIEntry("activeCrises", activeCrises, previousCrises),
+    };
+
+    previousTotalWealth = totalWealth;
+    previousStability = kpis.stability.value;
+    previousGrowth = kpis.economicGrowth.value;
+    previousSecurity = kpis.securityIndex.value;
+    previousCrises = kpis.activeCrises.value;
+
     reports.push({
-      quarter,
+      month,
       incomes: {
         gold: Number(incomes.gold.toFixed(2)),
         influence: Number(incomes.influence.toFixed(2)),
@@ -374,11 +458,34 @@ export function runSimulation(config: SimulationConfig): SimulationResult {
       estates: snapshotEstates(estates),
       regions: snapshotRegions(regions),
       events,
+      kpis,
     });
+  }
+
+  const kpiAverages = reports.reduce(
+    (acc, report) => {
+      acc.stability += report.kpis.stability.value;
+      acc.economicGrowth += report.kpis.economicGrowth.value;
+      acc.securityIndex += report.kpis.securityIndex.value;
+      acc.activeCrises += report.kpis.activeCrises.value;
+      return acc;
+    },
+    { stability: 0, economicGrowth: 0, securityIndex: 0, activeCrises: 0 }
+  );
+
+  if (reports.length > 0) {
+    kpiAverages.stability = Number((kpiAverages.stability / reports.length).toFixed(2));
+    kpiAverages.economicGrowth = Number((kpiAverages.economicGrowth / reports.length).toFixed(2));
+    kpiAverages.securityIndex = Number((kpiAverages.securityIndex / reports.length).toFixed(2));
+    kpiAverages.activeCrises = Number((kpiAverages.activeCrises / reports.length).toFixed(2));
   }
 
   return {
     reports,
+    kpiSummary: {
+      latest: reports[reports.length - 1]?.kpis ?? null,
+      averages: kpiAverages,
+    },
     totals: {
       incomes: {
         gold: Number(totalIncomes.gold.toFixed(2)),
