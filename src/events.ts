@@ -16,6 +16,7 @@ interface EventTemplateDefinition {
   title: (context: EventTemplateContext) => string;
   description: (context: EventTemplateContext) => string;
   factions: (context: EventTemplateContext) => string[];
+  triggers: (context: EventTemplateContext) => string[];
   conditions: (context: EventTemplateContext) => SimulationEvent["conditions"];
   options: (context: EventTemplateContext) => SimulationEventOption[];
   failure: (context: EventTemplateContext) => SimulationEventFailure;
@@ -34,6 +35,10 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
         milestone?.toFixed(1) ?? ""
       }.`,
     factions: () => ["Корона / центральная власть", "Гильдии купцов"],
+    triggers: ({ region }) => [
+      `metric:regions.${region?.name ?? "unknown"}.infrastructure`,
+      "flag:infrastructure_milestone",
+    ],
     conditions: ({ region, milestone }) => ({
       metrics: {
         [`regions.${region?.name ?? "unknown"}.infrastructure`]: `>= ${
@@ -104,6 +109,10 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
     description: ({ region }) =>
       `Представители населения ${region?.name ?? ""} жалуются на произвол чиновников и падение качества жизни.`,
     factions: () => ["Крестьянство / горожане", "Корона / центральная власть"],
+    triggers: ({ region }) => [
+      `metric:regions.${region?.name ?? "unknown"}.loyalty`,
+      "flag:loyalty_warning",
+    ],
     conditions: ({ region, loyalty }) => ({
       metrics: {
         [`regions.${region?.name ?? "unknown"}.loyalty`]: `<= ${
@@ -175,6 +184,10 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
     description: ({ estate }) =>
       `Лидеры сословия ${estate?.name ?? ""} требуют пересмотра текущей политики и угрожают саботажем решений совета.`,
     factions: ({ estate }) => [estate?.name ?? "влиятельное сословие", "Корона / центральная власть"],
+    triggers: ({ estate }) => [
+      `metric:estates.${estate?.name ?? "unknown"}.satisfaction`,
+      "flag:estate_pressure",
+    ],
     conditions: ({ estate, satisfaction }) => ({
       metrics: {
         [`estates.${estate?.name ?? "unknown"}.satisfaction`]: `<= ${
@@ -249,6 +262,7 @@ const EVENT_TEMPLATES: Record<string, EventTemplateDefinition> = {
     description: () =>
       "Совет предупреждает о невозможности финансировать обязательства без срочных мер экономии.",
     factions: () => ["Корона / центральная власть", "Гильдии купцов"],
+    triggers: () => ["metric:treasury", "flag:budget_alert"],
     conditions: () => ({
       metrics: {
         treasury: "<= 120",
@@ -325,6 +339,7 @@ function instantiateEvent(
     title: template.title(context),
     description: template.description(context),
     factions: template.factions(context),
+    triggers: template.triggers(context),
     conditions: template.conditions(context),
     options: template.options(context),
     failure: template.failure(context),

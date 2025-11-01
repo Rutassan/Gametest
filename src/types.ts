@@ -135,6 +135,7 @@ export interface SimulationEvent {
   description: string;
   category: EventCategory;
   factions: string[];
+  triggers: string[];
   conditions: SimulationEventCondition;
   options: SimulationEventOption[];
   failure: SimulationEventFailure;
