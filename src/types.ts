@@ -155,14 +155,30 @@ export interface RegionSnapshot {
   infrastructure: number;
 }
 
-export interface QuarterReport {
-  quarter: number;
+export type ThreatLevel = "low" | "moderate" | "critical";
+
+export interface KPIEntry {
+  value: number;
+  trend: number;
+  threatLevel: ThreatLevel;
+}
+
+export interface KPIReport {
+  stability: KPIEntry;
+  economicGrowth: KPIEntry;
+  securityIndex: KPIEntry;
+  activeCrises: KPIEntry;
+}
+
+export interface MonthlyReport {
+  month: number;
   incomes: ResourcePool;
   expenses: QuarterlyExpenses;
   treasury: ResourcePool;
   estates: EstateSnapshot[];
   regions: RegionSnapshot[];
   events: SimulationEvent[];
+  kpis: KPIReport;
 }
 
 export interface SimulationConfig {
@@ -179,8 +195,19 @@ export interface SimulationConfig {
   decree: Decree;
 }
 
+export interface KPIAverages {
+  stability: number;
+  economicGrowth: number;
+  securityIndex: number;
+  activeCrises: number;
+}
+
 export interface SimulationResult {
-  reports: QuarterReport[];
+  reports: MonthlyReport[];
+  kpiSummary: {
+    latest: KPIReport | null;
+    averages: KPIAverages;
+  };
   totals: {
     incomes: ResourcePool;
     expenses: QuarterlyExpenses;
